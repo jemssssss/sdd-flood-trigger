@@ -1,5 +1,6 @@
 import "./styles/App.css";
 import MapView from "./components/MapView";
+import RainLegend from "./components/RainLegend";
 import { useEffect, useState } from "react";
 import { fetchRainSynop } from "./services/panahonApi"
 import { parseRainStations } from "./utils/rainParser";
@@ -46,7 +47,30 @@ function App() {
       </header>
 
       <main className="content">
-        <MapView />
+        {loading && (
+          <div className="status-message">
+            Loading rainfall stations...
+          </div>
+        )}
+
+        {!loading && error && (
+          <div className="status-message error">
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && stations.length === 0 && (
+          <div className="status-message">
+            No rainfall stations available.
+          </div>
+        )}
+
+        {!loading && !error && stations.length > 0 && (
+          <>
+            <MapView stations={stations} />
+            <RainLegend />
+          </>
+        )}
       </main>
     </div>
   );
