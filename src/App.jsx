@@ -4,6 +4,8 @@ import RainLegend from "./components/RainLegend";
 import { useEffect, useState } from "react";
 import { fetchRainSynop } from "./services/panahonApi"
 import { parseRainStations } from "./utils/rainParser";
+import { sampleFootprint } from "./utils/footprintSampler";
+import { getLatestForecastTime } from "./utils/timeUtils";
 
 function App() {
 
@@ -11,6 +13,9 @@ function App() {
   const [footprints, setFootprints] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const forecastTime = getLatestForecastTime();
+  console.log("Using forecast time:", forecastTime);
 
   useEffect(() => {
     /* Loading, Error, and Empty States */
@@ -28,7 +33,7 @@ function App() {
 
         setStations(parsedStations);
 
-        /* Load rainfall stations */
+        /* Load polygons/footprints */
         const footprintResponse = await fetch("/data/s1a_footprints.geojson");
 
         if (!footprintResponse.ok) {
@@ -38,6 +43,47 @@ function App() {
         const footprintData = await footprintResponse.json();
 
         console.log("S1A Footprints:", footprintData);
+
+        /* Compute average rainfall for every polygon */ 
+        for (const feature of footprintData.features) {
+
+          try {
+
+            const result = await sampleFootprint(
+              feature,
+              forecastTime
+            );
+
+            feature.properties.averageRainfall =
+              result.averageRainfall;
+
+            console.log(
+              feature.properties.TileNumber,
+              result.averageRainfall
+            );
+
+          }
+
+          catch (err) {
+
+            console.error(
+              "Sampling failed:",
+              feature.properties.TileNumber,
+              err
+            );
+
+            feature.properties.averageRainfall = null;
+
+          }
+
+        }
+
+        console.table(
+          footprintData.features.map(f => ({
+            tile: f.properties.TileNumber,
+            rainfall: f.properties.averageRainfall
+          }))
+        );
 
         setFootprints(footprintData);
       } catch (err) {
@@ -63,7 +109,7 @@ function App() {
       <main className="content">
         {loading && (
           <div className="status-message">
-            Loading rainfall stations...
+            Loading rainfall data...
           </div>
         )}
 

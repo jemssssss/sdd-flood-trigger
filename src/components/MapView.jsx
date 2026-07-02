@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import RainStationPopup from "./RainStationPopup";
+import FootprintPopup from "./FootprintPopup";
 import maplibregl from "maplibre-gl";
 import bbox from "@turf/bbox";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -9,6 +10,11 @@ function MapView({ stations, footprints }) {
   /* Map general settings */
   const mapContainer = useRef(null);
   const map = useRef(null);
+
+  const hasFitBounds = useRef(false);
+
+  const stationPopup = useRef(null);
+  const footprintPopup = useRef(null);
 
   // Initialize the map only once
   useEffect(() => {
@@ -25,6 +31,16 @@ function MapView({ stations, footprints }) {
       new maplibregl.NavigationControl(),
       "top-right"
     );
+
+    stationPopup.current = new maplibregl.Popup({
+      closeButton: true,
+      closeOnClick: true,
+    });
+
+    footprintPopup.current = new maplibregl.Popup({
+      closeButton: true,
+      closeOnClick: true,
+    });
   }, []);
 
   /* Rendered rainfall stations*/
@@ -32,6 +48,7 @@ function MapView({ stations, footprints }) {
   useEffect(() => {
     if (!map.current) return;
 
+    // Obtain parameters
     const geojson = {
       type: "FeatureCollection",
       features: stations.map((station) => ({
@@ -42,7 +59,7 @@ function MapView({ stations, footprints }) {
           rainfallMm: station.rainfallMm,
           observedAt: station.observedAt,
           latitude: station.latitude,
-          longitude: station.longitude
+          longitude: station.longitude,
         },
         geometry: {
           type: "Point",
@@ -52,24 +69,27 @@ function MapView({ stations, footprints }) {
     };
 
     const updateRainfallLayer = () => {
-      // Update existing source
+
       if (map.current.getSource("rainfall")) {
         map.current.getSource("rainfall").setData(geojson);
+
+        // Always keep rainfall stations above polygons
+        if (map.current.getLayer("rainfall-layer")) {
+          map.current.moveLayer("rainfall-layer");
+        }
+
         return;
       }
 
-      // Add source
       map.current.addSource("rainfall", {
         type: "geojson",
         data: geojson,
       });
 
-      // Add layer
       map.current.addLayer({
         id: "rainfall-layer",
         type: "circle",
         source: "rainfall",
-
         paint: {
           "circle-radius": [
             "step",
@@ -78,28 +98,27 @@ function MapView({ stations, footprints }) {
             1, 7,
             10, 9,
             25, 11,
-            50, 13,
+            50, 13
           ],
-
           "circle-color": [
             "step",
             ["get", "rainfallMm"],
-            "#d6eaf8", // 0 mm
-            1, "#aed6f1", // 1–10
-            10, "#5dade2", // 10–25
-            25, "#2874a6", // 25–50
-            50, "#154360", // >50
+            "#d6eaf8",
+            1, "#aed6f1",
+            10, "#5dade2",
+            25, "#2874a6",
+            50, "#154360"
           ],
+          "circle-opacity": 1,
+          "circle-stroke-width": 2.5,
+          "circle-stroke-color": "#ffffff"
+        }
 
-          "circle-stroke-color": "#ffffff",
-          "circle-stroke-width": 1,
-        },
-      },
-      undefined // Place above the polygon outline
-    );
+      });
 
-      // Add pop-up
       map.current.on("click", "rainfall-layer", (e) => {
+        e.originalEvent.stopPropagation();
+
         const feature = e.features[0];
         const popupNode = document.createElement("div");
         const root = createRoot(popupNode);
@@ -110,10 +129,9 @@ function MapView({ stations, footprints }) {
           />
         );
 
-        new maplibregl.Popup({
-          closeButton: true,
-          closeOnClick: true
-        })
+        footprintPopup.current.remove();
+
+        stationPopup.current
           .setLngLat(feature.geometry.coordinates)
           .setDOMContent(popupNode)
           .addTo(map.current);
@@ -127,14 +145,15 @@ function MapView({ stations, footprints }) {
       map.current.on("mouseleave", "rainfall-layer", () => {
         map.current.getCanvas().style.cursor = "";
       });
+
     };
 
-    // Wait until the style has loaded
     if (!map.current.isStyleLoaded()) {
       map.current.once("load", updateRainfallLayer);
     } else {
       updateRainfallLayer();
     }
+
   }, [stations]);
 
   /* Rendered polygons */
@@ -163,8 +182,16 @@ function MapView({ stations, footprints }) {
           type: "fill",
           source: "footprints",
           paint: {
-            "fill-color": "#66b3ff",
-            "fill-opacity": 0.12,
+            "fill-color": [
+              "step",
+              ["coalesce", ["get", "averageRainfall"], 0],
+              "#eef7ff",
+              1, "#cfe8ff",
+              10, "#7db7ff",
+              25, "#3182bd",
+              50, "#08519c"
+            ],
+            "fill-opacity": 0.30
           },
         });
 
@@ -177,16 +204,91 @@ function MapView({ stations, footprints }) {
             "line-width": 2,
           },
         });
+        
+        if (map.current.getLayer("rainfall-layer")) {
+          map.current.moveLayer("rainfall-layer");
+        }
+
+        map.current.on("click", "footprints-fill", (e) => {
+
+        // If a rainfall station exists at this location,
+        // don't open the footprint popup.
+        const stations = map.current.queryRenderedFeatures(
+          e.point,
+          {
+            layers: ["rainfall-layer"]
+          }
+        );
+
+        if (stations.length > 0) {
+          return;
+        }
+
+        const feature = e.features[0];
+        const popupNode = document.createElement("div");
+        const root = createRoot(popupNode);
+
+        root.render(
+          <FootprintPopup
+            footprint={feature.properties}
+          />
+        );
+
+        stationPopup.current.remove();
+
+        footprintPopup.current
+          .setLngLat(e.lngLat)
+          .setDOMContent(popupNode)
+          .addTo(map.current);
+
+      });
+
+        map.current.on("mouseenter", "footprints-fill", () => {
+          map.current.getCanvas().style.cursor = "pointer";
+        });
+
+        map.current.on("mouseleave", "footprints-fill", () => {
+          map.current.getCanvas().style.cursor = "";
+        });
+      }
+
+      if (map.current.getLayer("footprints-fill")) {
+
+        map.current.setPaintProperty(
+          "footprints-fill",
+          "fill-color",
+          [
+            "step",
+            ["coalesce", ["get", "averageRainfall"], 0],
+
+            "#eef7ff",
+            1, "#cfe8ff",
+            10, "#7db7ff",
+            25, "#3182bd",
+            50, "#08519c"
+          ]
+        );
+
       }
 
       // Fit map to polygons
-      const bounds = bbox(footprints);
+      
+      if (!hasFitBounds.current) {
 
-      map.current.fitBounds(bounds, {
-        padding: 40,
-        duration: 1000,
-      });
+        const bounds = bbox(footprints);
+
+        map.current.fitBounds(bounds, {
+          padding: 40,
+          duration: 1000,
+        });
+
+        hasFitBounds.current = true;
+      }
     };
+
+    if (map.current.getLayer("rainfall-layer")) {
+      map.current.moveLayer("rainfall-layer");
+    }
 
     if (map.current.isStyleLoaded()) {
       addOrUpdateFootprints();
@@ -195,6 +297,14 @@ function MapView({ stations, footprints }) {
     }
 
 }, [footprints]);
+
+/* Clean up when the component unmounts */
+useEffect(() => {
+  return () => {
+    stationPopup.current?.remove();
+    footprintPopup.current?.remove();
+  };
+}, []);
 
   return (
     <div
