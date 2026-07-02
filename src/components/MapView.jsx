@@ -2,9 +2,10 @@ import { useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import RainStationPopup from "./RainStationPopup";
 import maplibregl from "maplibre-gl";
+import bbox from "@turf/bbox";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-function MapView({ stations }) {
+function MapView({ stations, footprints }) {
   /* Map general settings */
   const mapContainer = useRef(null);
   const map = useRef(null);
@@ -93,7 +94,9 @@ function MapView({ stations }) {
           "circle-stroke-color": "#ffffff",
           "circle-stroke-width": 1,
         },
-      });
+      },
+      undefined // Place above the polygon outline
+    );
 
       // Add pop-up
       map.current.on("click", "rainfall-layer", (e) => {
@@ -133,6 +136,65 @@ function MapView({ stations }) {
       updateRainfallLayer();
     }
   }, [stations]);
+
+  /* Rendered polygons */
+  useEffect(() => {
+
+    if (!map.current || !footprints) return;
+
+    // Update and add layer
+    const addOrUpdateFootprints = () => {
+
+      if (map.current.getSource("footprints")) {
+
+        map.current
+          .getSource("footprints")
+          .setData(footprints);
+
+      } else {
+
+        map.current.addSource("footprints", {
+          type: "geojson",
+          data: footprints,
+        });
+
+        map.current.addLayer({
+          id: "footprints-fill",
+          type: "fill",
+          source: "footprints",
+          paint: {
+            "fill-color": "#66b3ff",
+            "fill-opacity": 0.12,
+          },
+        });
+
+        map.current.addLayer({
+          id: "footprints-outline",
+          type: "line",
+          source: "footprints",
+          paint: {
+            "line-color": "#1f78b4",
+            "line-width": 2,
+          },
+        });
+      }
+
+      // Fit map to polygons
+      const bounds = bbox(footprints);
+
+      map.current.fitBounds(bounds, {
+        padding: 40,
+        duration: 1000,
+      });
+    };
+
+    if (map.current.isStyleLoaded()) {
+      addOrUpdateFootprints();
+    } else {
+      map.current.once("load", addOrUpdateFootprints);
+    }
+
+}, [footprints]);
 
   return (
     <div

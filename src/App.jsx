@@ -8,6 +8,7 @@ import { parseRainStations } from "./utils/rainParser";
 function App() {
 
   const [stations, setStations] = useState([]);
+  const [footprints, setFootprints] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -18,16 +19,29 @@ function App() {
       setError(null);
 
       try {
+        /* Load rainfall stations */
         const response = await fetchRainSynop();
-
-        console.log("Raw response:", response);
 
         const parsedStations = parseRainStations(response);
 
         console.table(parsedStations);
 
         setStations(parsedStations);
+
+        /* Load rainfall stations */
+        const footprintResponse = await fetch("/data/s1a_footprints.geojson");
+
+        if (!footprintResponse.ok) {
+          throw new Error("Failed to load S1A footprint polygons.");
+        }
+
+        const footprintData = await footprintResponse.json();
+
+        console.log("S1A Footprints:", footprintData);
+
+        setFootprints(footprintData);
       } catch (err) {
+        console.error(err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -67,7 +81,10 @@ function App() {
 
         {!loading && !error && stations.length > 0 && (
           <>
-            <MapView stations={stations} />
+            <MapView 
+              stations={stations}
+              footprints={footprints} 
+            />
             <RainLegend />
           </>
         )}

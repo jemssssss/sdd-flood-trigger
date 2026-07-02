@@ -31,6 +31,7 @@ A web-based rainfall monitoring dashboard built with **React**, **Vite**, and **
 | Vite | 8.1.0 |
 | React | 19.2.7 |
 | MapLibre GL JS | Latest compatible version |
+| Turf/bbox | Latest compatible version |
 
 ---
 
