@@ -22,4 +22,5 @@ urlpatterns = [
     path("", include("apps.core.urls")), 
     path("ecmwf/", include("apps.ecmwf.urls")),
     path("panahon/", include("apps.panahon.urls")),
+    path("sentinel/", include("apps.panahon.urls")),
 ]

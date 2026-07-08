@@ -15,4 +15,16 @@ urlpatterns = [
         name="aws",
     ),
 
+    path(
+        "point",
+        views.point,
+        name="point",
+    ),
+
+    path(
+        "footprints",
+        views.footprints,
+        name="footprints",
+    ),
+
 ]

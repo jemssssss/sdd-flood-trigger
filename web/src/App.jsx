@@ -4,8 +4,9 @@ import LayerControl from "./components/LayerControl";
 import RainLegend from "./components/RainLegend";
 import FloodSummary from "./components/FloodSummary";
 import { useEffect, useState } from "react";
-import { sampleFootprint } from "./utils/footprintSampler";
 import { getAccumulationTimes } from "./utils/timeUtils";
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_BASE_URL;
 
 function App() {
 
@@ -25,126 +26,75 @@ function App() {
   console.log("Init time:", initTime);
 
   useEffect(() => {
+
     /* Loading, Error, and Empty States */
+
     async function fetchStations() {
-      setLoading(true);
-      setError(null);
 
-      try {
-        /* Load synoptic and AWS rainfall stations */
-        const [synopticResponse, awsResponse] =
-        await Promise.all([
-          fetch("http://localhost:8000/panahon/synoptic"),
-          fetch("http://localhost:8000/panahon/aws")
-        ]);
+    setLoading(true);
+    setError(null);
 
-        const synopticStations =
-          await synopticResponse.json();
+    try {
 
-        const awsStations =
-          await awsResponse.json();
+      /* Fetching Rainfall Data */
 
-        console.table(synopticStations);
-        console.table(awsStations);
+      const [
+        synopticResponse,
+        awsResponse,
+      ] = await Promise.all([
 
-        setSynopticStations(synopticStations);
-        setAwsStations(awsStations);
+        fetch(`${BACKEND_URL}/panahon/synoptic`),
+        fetch(`${BACKEND_URL}/panahon/aws`),
 
-        /* Load polygons/footprints */
-        const footprintResponse = await fetch(`${import.meta.env.BASE_URL}/data/s1a_footprints.geojson`);
+      ]);
 
-        if (!footprintResponse.ok) {
-          throw new Error("Failed to load S1A footprint polygons.");
-        }
+      const footprintResponse = await fetch(
+        `${import.meta.env.VITE_BACKEND_BASE_URL}/panahon/footprints` +
+        `?t=${encodeURIComponent(forecastTime)}` +
+        `&init=${encodeURIComponent(initTime)}`
+      );
 
-        const footprintData = await footprintResponse.json();
-
-        console.log("S1A Footprints:", footprintData);
-
-        // Load predetermined footprint points
-        
-        const sampleResponse = await fetch(`${import.meta.env.BASE_URL}/data/footprintSamplePoints.json`);
-
-        if (!sampleResponse.ok) {
-          throw new Error("Failed to load footprint sample points.");
-        }
-
-        const samplePoints =
-          await sampleResponse.json();
-
-        /* Compute average rainfall for every polygon */ 
-        await Promise.all( 
-          footprintData.features.map(async feature => {
-
-            try {
-
-              const result = await sampleFootprint(
-                feature,
-                samplePoints,
-                forecastTime,
-                initTime
-              );
-
-              feature.properties.averageRainfall =
-                result.averageRainfall;
-
-              console.log(
-                feature.properties.TileNumber,
-                result.averageRainfall
-              );
-
-            }
-
-            catch (err) {
-
-              console.error(
-                "Sampling failed:",
-                feature.properties.TileNumber,
-                err
-              );
-
-              feature.properties.averageRainfall = null;
-
-            }
-          
-          })
-        );
-
-        console.table(
-          footprintData.features.map(f => ({
-            tile: f.properties.TileNumber,
-            rainfall: f.properties.averageRainfall
-          }))
-        );
-
-        const summary = {moderate: [], heavy: []};
-        footprintData.features.forEach(feature => {
-
-          const rainfall = feature.properties.averageRainfall ?? 0;
-          const tile = feature.properties.TileNumber;
-
-          if (rainfall >= 60 && rainfall <= 180) {
-            summary.moderate.push(tile);
-          }
-          else if (rainfall > 180) {
-            summary.heavy.push(tile);
-          }
-
-        });
-
-        summary.moderate.sort();
-        summary.heavy.sort();
-
-        setFloodSummary(summary);
-
-        setFootprints(footprintData);
-      } catch (err) {
-        console.error(err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      if (
+        !synopticResponse.ok ||
+        !awsResponse.ok 
+      ) {
+        throw new Error("Backend request for rainfall stations failed.");
       }
+
+      if (!footprintResponse.ok) {
+        throw new Error("Failed to compute footprints.");
+      }
+
+      const synopticStations = await synopticResponse.json();
+      const awsStations = await awsResponse.json();
+      const footprintResult = await footprintResponse.json();
+
+      console.table(synopticStations);
+      console.table(awsStations);
+      console.table(
+        footprintResult.geojson.features.map(feature => ({
+          tile: feature.properties.TileNumber,
+          rainfall: feature.properties.averageRainfall
+        }))
+      );
+
+      setSynopticStations(synopticStations);
+      setAwsStations(awsStations);
+      setFootprints(footprintResult.geojson);
+      setFloodSummary(footprintResult.summary);
+
     }
+
+    catch (err) {
+      console.error(err);
+      setError(err.message);
+    }
+
+    finally {
+      setLoading(false);
+    }
+
+  }
 
     fetchStations();
   }, []);
