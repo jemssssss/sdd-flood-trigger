@@ -205,40 +205,66 @@ The project is configured to deploy from the **gh-pages** branch.
 # Project Structure
 
 ```text
-public/
-└── data/
-    ├── s1a_footprints.geojson
-    └── footprintSamplePoints.json
-
-src/
-├── components/
-│   ├── map/
-│   │   ├── footprintLayer.jsx
-│   │   └── stationLayer.jsx
+backend/
+├── apps/
+│   ├── core/
+│   │   ├── urls.py
+│   │   └── views.py
 │   │
-│   ├── LayerControl.jsx
-│   ├── FloodSummary.jsx
-│   ├── FootprintPopup.jsx
-│   ├── MapView.jsx
-│   ├── RainLegend.jsx
-│   ├── StationLayer.jsx
-│   └── StationPopup.jsx
+│   └── ecmwf/
+│       ├── urls.py
+│       └── views.py
+│
+├── config/
+│   ├── asgi.py
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
 │
 ├── services/
-│   └── panahonApi.js
-│
-├── utils/
-│   ├── footprintSampler.js
-│   ├── generateFootprintPoints.mjs
-│   ├── rainParser.js
-│   └── timeUtils.js
-│
-├── styles/
-│   ├── App.css
-│   └── index.css
-│
-├── App.jsx
-└── main.jsx
+│   └── ecmwf/
+│       └── point.py
+│       
+├── manage.py
+└── requirements.txt
+
+web/
+├── public/
+│   └── data/
+│       ├── s1a_footprints.geojson
+│       └── footprintSamplePoints.json
+│    
+└── src/
+    ├── components/
+    │   ├── map/
+    │   │   ├── footprintLayer.jsx
+    │   │   └── stationLayer.jsx
+    │   │
+    │   ├── EcmwfPointTest.jsx
+    │   ├── LayerControl.jsx
+    │   ├── FloodSummary.jsx
+    │   ├── FootprintPopup.jsx
+    │   ├── MapView.jsx
+    │   ├── RainLegend.jsx
+    │   ├── StationLayer.jsx
+    │   └── StationPopup.jsx
+    │
+    ├── services/
+    │   ├── ecmwfApi.jsx
+    │   └── panahonApi.js
+    │
+    ├── utils/
+    │   ├── footprintSampler.js
+    │   ├── generateFootprintPoints.mjs
+    │   ├── rainParser.js
+    │   └── timeUtils.js
+    │
+    ├── styles/
+    │   ├── App.css
+    │   └── index.css
+    │
+    ├── App.jsx
+    └── main.jsx
 ```
 
 ---
