@@ -4,8 +4,6 @@ import LayerControl from "./components/LayerControl";
 import RainLegend from "./components/RainLegend";
 import FloodSummary from "./components/FloodSummary";
 import { useEffect, useState } from "react";
-import { fetchRainSynop, fetchAWSRain } from "./services/panahonApi";
-import { parseRainStations } from "./utils/rainParser";
 import { sampleFootprint } from "./utils/footprintSampler";
 import { getAccumulationTimes } from "./utils/timeUtils";
 
@@ -34,24 +32,23 @@ function App() {
 
       try {
         /* Load synoptic and AWS rainfall stations */
-        const [ synopticResponse, awsResponse ] = await Promise.all([ fetchRainSynop(), fetchAWSRain() ]);
+        const [synopticResponse, awsResponse] =
+        await Promise.all([
+          fetch("http://localhost:8000/panahon/synoptic"),
+          fetch("http://localhost:8000/panahon/aws")
+        ]);
 
-        const parsedSynoptic = parseRainStations(
-            synopticResponse,
-            "synoptic"
-          );
+        const synopticStations =
+          await synopticResponse.json();
 
-        const parsedAWS =
-          parseRainStations(
-            awsResponse,
-            "aws"
-          );
+        const awsStations =
+          await awsResponse.json();
 
-        console.table(parsedSynoptic);
-        console.table(parsedAWS);
+        console.table(synopticStations);
+        console.table(awsStations);
 
-        setSynopticStations(parsedSynoptic);
-        setAwsStations(parsedAWS);
+        setSynopticStations(synopticStations);
+        setAwsStations(awsStations);
 
         /* Load polygons/footprints */
         const footprintResponse = await fetch(`${import.meta.env.BASE_URL}/data/s1a_footprints.geojson`);

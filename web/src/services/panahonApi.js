@@ -1,49 +1,5 @@
 const pointCache = new Map();
 
-export async function fetchRainSynop() {
-	const token = import.meta.env.VITE_PANAHON_API_TOKEN;
-
-	if (!token) {
-		throw new Error("Missing VITE_PANAHON_API_TOKEN");
-	}
-
-	const url =
-		`https://www.panahon.gov.ph/api/v1/synop?token=${token}&parameter=rain`;
-
-	const response = await fetch(url);
-
-	if (!response.ok) {
-		throw new Error(
-			`Panahon API request failed: ${response.status}`
-		);
-	}
-
-	return response.json();
-}
-
-export async function fetchAWSRain() {
-  const token = import.meta.env.VITE_PANAHON_API_TOKEN;
-
-  if (!token) {
-    throw new Error("Missing VITE_PANAHON_API_TOKEN");
-  }
-
-  const url =
-    `https://www.panahon.gov.ph/api/v1/aws` +
-    `?token=${token}` +
-    `&parameter=accumulated_rain_1h`;
-
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error(
-      `AWS API request failed: ${response.status}`
-    );
-  }
-
-  return response.json();
-}
-
 export async function fetchPointRainfall(lat, lon, forecastTime, initTime) {
   const token = import.meta.env.VITE_PANAHON_API_TOKEN;
 
