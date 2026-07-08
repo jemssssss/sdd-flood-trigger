@@ -182,6 +182,7 @@ function App() {
 
         {!loading && !error && synopticStations.length > 0 && awsStations.length > 0 && (
           <>
+
             <LayerControl
 
               showSynoptic={showSynoptic}

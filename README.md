@@ -74,6 +74,60 @@ cd sdd-flood-trigger
 
 ---
 
+## Development setup
+
+This repository now has two parts:
+
+- `web/` - React + Vite + MapLibre frontend
+- `backend/` - Django backend
+
+### Run the web app
+
+```cmd
+cd web
+npm install
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+### Run the backend
+
+```cmd
+cd backend
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python manage.py runserver 127.0.0.1:8000
+```
+
+Open:
+
+```text
+http://localhost:8000/health/
+```
+
+Test ECMWF dummy endpoint:
+
+```text
+http://localhost:8000/ecmwf/point?url=prate_accum&t=2026-07-08T11:00:00&lon=126.34680273437502&lat=12.971578177493043&init=2026-07-07T12:00:00Z
+```
+
+Expected output:
+
+```json
+{
+  "coordinates": [126.34680273437502, 12.971578177493043], 
+  "values": [3.9]
+}
+```
+
+---
+
 # Environment Variables
 
 Create a `.env` file.

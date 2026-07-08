@@ -1,5 +1,22 @@
 # Environment variables
 .env
+.env.local
+web/.env
+backend/.env
+
+# Python
+__pycache__/*
+.py[cod]
+backend/.venv/
+backend/db.sqlite3
+
+# Django future outputs
+backend/media/
+backend/staticfiles/
+
+# Node
+web/node_modules/
+web/dist/
 
 # Logs
 logs
@@ -9,6 +26,12 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+
+# Local data outputs
+backend/data/output/*
+!backend/data/output/.gitkeep
+backend/data/input/*
+!backend/data/input/.gitkeep
 
 node_modules
 dist
