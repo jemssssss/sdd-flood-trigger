@@ -1,9 +1,8 @@
+import asyncio
 import json
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
+import httpx
 from django.conf import settings
-from services.sentinel.point import fetch_point_rainfall
-
 
 ROOT = settings.BASE_DIR.parent
 
@@ -23,96 +22,209 @@ SAMPLE_FILE = (
     / "footprintSamplePoints.json"
 )
 
+TOKEN = settings.PANAHON_API_TOKEN
 
-def compute_footprints(forecast_time, init_time):
+POINT_URL = "https://www.panahon.gov.ph/api/v1/tiles/point"
 
-    # Load footprint polygons
-    with open(FOOTPRINT_FILE, encoding="utf-8") as f:
+# Maximum simultaneous requests
+MAX_CONCURRENT_REQUESTS = 20
+
+async def fetch_point(
+    client,
+    semaphore,
+    lat,
+    lon,
+    forecast_time,
+    init_time,
+):
+
+    params = {
+        "url": "prate_accum",
+        "lat": lat,
+        "lon": lon,
+        "t": forecast_time,
+        "init": init_time,
+        "token": TOKEN,
+    }
+
+    async with semaphore:
+
+        try:
+            response = await client.get(
+                POINT_URL,
+                params=params,
+                timeout=30,
+            )
+
+            response.raise_for_status()
+            data = response.json()
+
+            rainfall = data.get("values", [0])[0]
+
+            key = (
+                round(lat, 8),
+                round(lon, 8),
+            )
+
+            return key, float(rainfall or 0)
+        except Exception as e:
+            print(
+                f"FAILED ({lat}, {lon}) -> {e}"
+            )
+            return (lat, lon), 0.0
+
+
+async def compute_worker(
+    forecast_time,
+    init_time,
+):
+
+    # -----------------------
+    # Read files
+    # -----------------------
+
+    with open(
+        FOOTPRINT_FILE,
+        encoding="utf-8",
+    ) as f:
+
         geojson = json.load(f)
 
-    # Load sample points
-    with open(SAMPLE_FILE, encoding="utf-8") as f:
+    with open(
+        SAMPLE_FILE,
+        encoding="utf-8",
+    ) as f:
+
         sample_points = json.load(f)
 
-    # Convert list into dictionary for O(1) lookup
     sample_lookup = {
         item["tile"]: item["samplePoints"]
         for item in sample_points
     }
+
+    # -----------------------
+    # Build unique coordinate list
+    # -----------------------
+
+    unique_points = {}
+
+    for samples in sample_lookup.values():
+
+        for point in samples:
+
+            key = (
+                round(point["lat"], 8),
+                round(point["lon"], 8),
+            )
+
+            unique_points[key] = point
+
+    print(
+        f"Unique sampling points: {len(unique_points)}"
+    )
+
+    semaphore = asyncio.Semaphore(
+        MAX_CONCURRENT_REQUESTS
+    )
+
+    limits = httpx.Limits(
+        max_connections=MAX_CONCURRENT_REQUESTS,
+        max_keepalive_connections=MAX_CONCURRENT_REQUESTS,
+    )
+
+    rainfall_cache = {}
+
+    async with httpx.AsyncClient(
+        limits=limits
+    ) as client:
+
+        tasks = [
+
+            fetch_point(
+                client,
+                semaphore,
+                point["lat"],
+                point["lon"],
+                forecast_time,
+                init_time,
+            )
+
+            for point in unique_points.values()
+
+        ]
+
+        results = await asyncio.gather(*tasks)
+
+    for key, rainfall in results:
+
+        rainfall_cache[key] = rainfall
+
+    # -----------------------
+    # Compute averages
+    # -----------------------
 
     summary = {
         "moderate": [],
         "heavy": [],
     }
 
-    def process_feature(feature):
+    for feature in geojson["features"]:
 
         tile = feature["properties"]["TileNumber"]
 
         samples = sample_lookup.get(tile)
 
         if samples is None:
+
             feature["properties"]["averageRainfall"] = None
-            return feature, None
 
-        # Fetch every point simultaneously
-        with ThreadPoolExecutor(max_workers=15) as executor:
+            continue
 
-            rainfall_values = list(
-                executor.map(
-                    lambda point: fetch_point_rainfall(
-                        point["lat"],
-                        point["lon"],
-                        forecast_time,
-                        init_time,
-                    ),
-                    samples,
-                )
+        rainfall = []
+
+        for point in samples:
+
+            key = (
+                round(point["lat"], 8),
+                round(point["lon"], 8),
+            )
+
+            rainfall.append(
+                rainfall_cache[key]
             )
 
         average = (
-            sum(rainfall_values)
-            / len(rainfall_values)
+            sum(rainfall)
+            / len(rainfall)
         )
 
         feature["properties"]["averageRainfall"] = average
 
-        category = None
-
         if 60 <= average <= 180:
-            category = ("moderate", tile)
+
+            summary["moderate"].append(tile)
 
         elif average > 180:
-            category = ("heavy", tile)
 
-        return feature, category
-
-    # Process all footprints simultaneously
-    with ThreadPoolExecutor(max_workers=8) as executor:
-
-        results = list(
-            executor.map(
-                process_feature,
-                geojson["features"],
-            )
-        )
-
-    processed_features = []
-
-    for feature, category in results:
-
-        processed_features.append(feature)
-
-        if category is not None:
-            level, tile = category
-            summary[level].append(tile)
+            summary["heavy"].append(tile)
 
     summary["moderate"].sort()
     summary["heavy"].sort()
-
-    geojson["features"] = processed_features
 
     return {
         "geojson": geojson,
         "summary": summary,
     }
+
+
+def compute_footprints(
+    forecast_time,
+    init_time,
+):
+
+    return asyncio.run(
+        compute_worker(
+            forecast_time,
+            init_time,
+        )
+    )

@@ -1,4 +1,4 @@
-const ACCUMULATION_HOUR = Number(import.meta.env.SENSING_TIME ?? 10); 
+const ACCUMULATION_HOUR = Number(import.meta.env.VITE_SENSING_TIME ?? 10); 
 
 export function getAccumulationTimes() {
 
@@ -13,9 +13,9 @@ export function getAccumulationTimes() {
   // use yesterday instead.
   const now = new Date();
 
-  if (now < end) {
-    end.setDate(end.getDate() - 1);
-  }
+  //if (now < end) {
+  //  end.setDate(end.getDate() - 1);
+  //}
 
   const start = new Date(end);
   start.setDate(start.getDate() - 1);
@@ -63,11 +63,12 @@ export function getLatestTimeDate() {
 
 export function formatSensingTime() {
   const sensingTime = ACCUMULATION_HOUR;
+  const sensingTimeR = ACCUMULATION_HOUR - 12;
 
   if (sensingTime < 12) {
-    return `${ACCUMULATION_HOUR} AM`;
+    return `${sensingTime} AM`;
   }
   else {
-    return `${ACCUMULATION_HOUR} PM`;
+    return `${sensingTimeR} PM`;
   }
 }

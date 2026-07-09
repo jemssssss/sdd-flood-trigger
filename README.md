@@ -1,6 +1,8 @@
 # Space Data Dashboard (SDD) Flood Trigger
 
-A web-based rainfall visualization dashboard built with **React**, **Vite**, and **MapLibre GL JS**. The application retrieves both **Synoptic Station** and **Automatic Weather Station (AWS)** rainfall observations from the **Panahon API**, visualizes them as interactive map layers, and computes the average forecast rainfall within Sentinel-1 footprint polygons using pre-generated sampling points.
+A web-based rainfall visualization dashboard built with **React**, **Vite**, **MapLibre GL JS**, and a lightweight **Django backend**.
+
+The application retrieves **Synoptic Station**, **Automatic Weather Station (AWS)**, and **Sentinel-1A footprint rainfall** from the **Panahon API** through backend service endpoints. The backend also provides the foundation for future **ECMWF Open Data**, **PostgreSQL/PostGIS**, and additional Python-based geospatial services.
 
 ![SDD Flood Trigger Preview](/docs/dashboard_preview.png)
 
@@ -22,7 +24,6 @@ A web-based rainfall visualization dashboard built with **React**, **Vite**, and
 - Displays Sentinel-1 footprint polygons
 - Computes average 24-hour accumulated forecast rainfall for every footprint
 - Uses pre-generated sampling points for reproducible rainfall averaging
-- Parallel rainfall sampling using `Promise.all()`
 - Summarizes list of Sentinel-1A tiles showing signs of flooding
 - Color-coded rainfall stations
 - Color-coded footprint polygons
@@ -30,6 +31,13 @@ A web-based rainfall visualization dashboard built with **React**, **Vite**, and
 - Interactive footprint popups
 - Rainfall legend
 - Loading, error, and empty states
+- Django backend API layer
+- Backend proxy for Panahon API requests
+- Backend Sentinel footprint sampling service
+- Backend rainfall parsing service
+- Cached point rainfall requests
+- Designed for future ECMWF Open Data integration
+- Prepared for PostgreSQL/PostGIS integration
 
 ---
 
@@ -41,8 +49,12 @@ A web-based rainfall visualization dashboard built with **React**, **Vite**, and
 | npm | 10.9.3 |
 | Vite | 8.1.0 |
 | React | 19.2.7 |
+| Python | 3.13.14 |
+| Django | 6.0.7 |
 | MapLibre GL JS | Latest compatible version |
 | Turf.js | Latest compatible version |
+| Requests | Latest compatible version |
+| httpx | Latest compatible version |
 
 ---
 
@@ -111,31 +123,24 @@ Open:
 http://localhost:8000/health/
 ```
 
-Test ECMWF dummy endpoint:
-
-```text
-http://localhost:8000/ecmwf/point?url=prate_accum&t=2026-07-08T11:00:00&lon=126.34680273437502&lat=12.971578177493043&init=2026-07-07T12:00:00Z
-```
-
-Expected output:
-
-```json
-{
-  "coordinates": [126.34680273437502, 12.971578177493043], 
-  "values": [3.9]
-}
-```
-
 ---
 
 # Environment Variables
 
 Create a `.env` file.
 
+## Frontend
+
 ```env
-VITE_PANAHON_API_TOKEN=YOUR_API_TOKEN
+VITE_BACKEND_BASE_URL=http://localhost:8000
 SENSING_TIME=sensing_time_here
 SAMPLING_POINTS=sample_points_here
+```
+
+## Backend
+
+```env
+PANAHON_API_TOKEN=YOUR_API_TOKEN
 ```
 
 Sensing time and sampling points are variables that can be changed according to the user's needs.
@@ -211,7 +216,11 @@ backend/
 │   │   ├── urls.py
 │   │   └── views.py
 │   │
-│   └── ecmwf/
+│   ├── ecmwf/
+│   │   ├── urls.py
+│   │   └── views.py
+│   │
+│   └── panahon/
 │       ├── urls.py
 │       └── views.py
 │
@@ -222,7 +231,15 @@ backend/
 │   └── wsgi.py
 │
 ├── services/
-│   └── ecmwf/
+│   ├── ecmwf/
+│   │   └── point.py
+│   │
+│   ├── panahon/
+│   │   ├── client.py
+│   │   └── parser.py
+│   │
+│   └── sentinel/
+│       ├── footprint.py
 │       └── point.py
 │       
 ├── manage.py
@@ -250,13 +267,10 @@ web/
     │   └── StationPopup.jsx
     │
     ├── services/
-    │   ├── ecmwfApi.jsx
-    │   └── panahonApi.js
+    │   └── ecmwfApi.jsx
     │
     ├── utils/
-    │   ├── footprintSampler.js
     │   ├── generateFootprintPoints.mjs
-    │   ├── rainParser.js
     │   └── timeUtils.js
     │
     ├── styles/
@@ -274,26 +288,22 @@ web/
 ```text
                     Panahon API
                          │
-      ┌──────────────────┼──────────────────┐
-      │                  │                  │
-      ▼                  ▼                  ▼
- /api/v1/synop      /api/v1/aws      /api/v1/tiles/point
-      │                  │                  ▲
-      ▼                  ▼                  │
- parseRainStations() parseAWSStations() Sample Points
-      │                  │                  │
-      ▼                  ▼                  │
- Synoptic Layer      AWS Layer      Average Footprint Rainfall
-      └──────────────────┬──────────────────┘
+                         ▼
+                Django Backend Services
+         ┌───────────────┼────────────────┐
+         │               │                │
+         ▼               ▼                ▼
+   Station Client   Point Sampling   Footprint Service
+         │               │                │
+         └───────────────┼────────────────┘
+                         │
+                  JSON API Endpoints
                          │
                          ▼
-                      App.jsx
+                 React + Vite Frontend
                          │
                          ▼
-                     MapView.jsx
-                         │
-                         ▼
-                  MapLibre GL JS Map
+                    MapLibre GL JS
 ```
 
 ---
@@ -305,7 +315,18 @@ web/
 Observed rainfall stations:
 
 ```text
-/api/v1/synop?parameter=rain
+React
+↓
+
+GET /panahon/synoptic
+
+↓
+
+Django
+
+↓
+
+Panahon API
 ```
 
 Represents **3-hour accumulated rainfall**.
@@ -317,7 +338,18 @@ Represents **3-hour accumulated rainfall**.
 Observed AWS stations:
 
 ```text
-/api/v1/aws?parameter=accumulated_rain_1h
+React
+↓
+
+GET /panahon/aws
+
+↓
+
+Django
+
+↓
+
+Panahon API
 ```
 
 Represents **24-hour accumulated rainfall**.
@@ -331,7 +363,18 @@ Although the endpoint returns hourly rainfall, this dashboard visualizes the **2
 Forecast rainfall is retrieved from:
 
 ```text
-/api/v1/tiles/point
+React
+↓
+
+GET /sentinel/footprints
+
+↓
+
+Django
+
+↓
+
+Panahon API
 ```
 
 using:
@@ -587,10 +630,39 @@ The application provides feedback during data retrieval.
 - Layer rendering has been modularized into dedicated map layer components.
 - Turf.js generated the initial sampling points.
 - Sampling points are reused between application runs.
-- Forecast rainfall requests execute concurrently using `Promise.all()`.
+- For every Sentinel-1A footprint:
+  1. Django loads the footprint GeoJSON.
+  2. Django loads the predefined sampling points.
+  3. Each sampling point requests 24-hour accumulated rainfall from the Panahon API.
+  4. Results are cached to avoid duplicate requests.
+  5. The arithmetic mean is computed.
+  6. The average rainfall is stored in the GeoJSON feature.
+  7. Flood summary tiles are generated.
+  8. The completed GeoJSON is returned to React.
 - Forecast timestamps are generated dynamically.
 - API responses are normalized before visualization.
 - Environment variables are accessed using `import.meta.env`.
+- Django serves as the backend API layer.
+- Rainfall parsing has been migrated from React to Python.
+- Footprint sampling is now performed on the backend.
+- API tokens remain on the backend.
+- React now focuses primarily on visualization.
+
+---
+
+# Backend Services
+
+The Django backend currently provides lightweight API services for the frontend.
+
+Implemented services include:
+
+- Health endpoint
+- Panahon Synoptic endpoint
+- Panahon AWS endpoint
+- Panahon Point Rainfall endpoint
+- Panahon Sentinel Footprint Sampling endpoint
+
+These services simplify the frontend while preparing the project for future migration to database-backed processing.
 
 ---
 
