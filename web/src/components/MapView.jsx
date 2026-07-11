@@ -8,13 +8,20 @@ import maplibregl from "maplibre-gl";
 import bbox from "@turf/bbox";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-function MapView({ synopticStations, awsStations, showSynoptic, showAWS, footprints, showFootprints }) {
+function MapView({ 
+  synopticStations, 
+  awsStations, 
+  showSynoptic, 
+  showAWS, 
+  panahonFootprints, 
+  showPanahonFootprints, 
+  ecmwfFootprints, 
+  showEcmwfFootprints 
+}) {
   /* Map general settings */
   const mapContainer = useRef(null);
   const map = useRef(null);
-
   const hasFitBounds = useRef(false);
-
   const stationPopup = useRef(null);
   const footprintPopup = useRef(null);
 
@@ -99,20 +106,23 @@ function MapView({ synopticStations, awsStations, showSynoptic, showAWS, footpri
 
   }, [awsStations, showAWS]);
 
-  /* Rendered polygons */
+  /* Rendered footprints (Panahon) */
   useEffect(() => {
 
-  if (!map.current || !footprints) return;
+  if (!map.current || !panahonFootprints) return;
 
   const renderFootprints = () => {
 
     updateFootprintLayer({
       map: map.current,
-      footprints,
-      showFootprints,
+      sourceId: "panahon-footprints",
+      fillLayerId: "panahon-fill",
+      outlineLayerId: "panahon-outline",
+      footprints: panahonFootprints,
+      visible: showPanahonFootprints,
       hasFitBounds,
       stationPopup,
-      footprintPopup
+      footprintPopup,
     });
 
     if (map.current.getLayer("synoptic-layer")) {
@@ -131,7 +141,44 @@ function MapView({ synopticStations, awsStations, showSynoptic, showAWS, footpri
     map.current.once("load", renderFootprints);
   }
 
-}, [footprints, showFootprints]);
+}, [panahonFootprints, showPanahonFootprints]);
+
+/* Rendered footprints (ECMWF) */
+  useEffect(() => {
+
+  if (!map.current || !ecmwfFootprints) return;
+
+  const renderFootprints = () => {
+
+    updateFootprintLayer({
+      map: map.current,
+      sourceId: "ecmwf-footprints",
+      fillLayerId: "ecmwf-fill",
+      outlineLayerId: "ecmwf-outline",
+      footprints: ecmwfFootprints,
+      visible: showEcmwfFootprints,
+      hasFitBounds,
+      stationPopup,
+      footprintPopup,
+    });
+
+    if (map.current.getLayer("synoptic-layer")) {
+      map.current.moveLayer("synoptic-layer");
+    }
+
+    if (map.current.getLayer("aws-layer")) {
+      map.current.moveLayer("aws-layer");
+    }
+
+  };
+
+  if (map.current.isStyleLoaded()) {
+    renderFootprints();
+  } else {
+    map.current.once("load", renderFootprints);
+  }
+
+}, [ecmwfFootprints, showEcmwfFootprints]);
 
 /* Clean up when the component unmounts */
 useEffect(() => {

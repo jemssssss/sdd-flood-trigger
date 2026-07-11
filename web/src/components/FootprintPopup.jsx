@@ -1,45 +1,73 @@
-import { getLatestTimeDate } from "../utils/timeUtils";
-import { formatSensingTime } from "../utils/timeUtils";
+import { getLatestTimeDate, formatSensingTime } from "../utils/timeUtils";
+
+function classify(mm) {
+  if (mm > 180) return "Heavy";
+  if (mm >= 60) return "Moderate";
+  return "Light";
+}
 
 function FootprintPopup({ footprint }) {
-  const timeAndDate = getLatestTimeDate();
-  const senseTime = formatSensingTime();
+
+  const SAMPLE_POINTS = Number(import.meta.env.VITE_SAMPLING_POINTS ?? 7);
+  const panahon = Number(footprint.panahonRainfall ?? 0);
+  const ecmwf = Number(footprint.ecmwfRainfall ?? 0);
 
   return (
+
     <div className="popup">
 
-      <h3>Average Panahon Forecast Rainfall / Rain Rate Sample</h3>
+      <h3>Sentinel-1A Footprint</h3>
 
       <p>
-        <strong>Sentinel Tile:</strong><br />
+        <strong>Tile</strong><br/>
         {footprint.TileNumber}
       </p>
 
       <p>
-        <strong>Forecast Date:</strong><br />
-        {timeAndDate}
+        <strong>Forecast Date</strong><br/>
+        {getLatestTimeDate()}
       </p>
 
       <p>
-        <strong>Sensing Time:</strong><br />
-        {senseTime}
+        <strong>Sensing Time</strong><br/>
+        {formatSensingTime()}
       </p>
 
       <p>
-        <strong>Sampling points used:</strong><br />
-        {Number(import.meta.env.SAMPLING_POINTS ?? 15)}
+        <strong>Sampling Points (Panahon API)</strong><br/>
+        {SAMPLE_POINTS}
       </p>
 
-      <p>
-        <strong>Forecast Accumulated Rainfall (24h):</strong><br />
-        {Number(footprint.averageRainfall).toFixed(2)} mm
-      </p>
+      <hr/>
+
+      <h4>24-hour Rainfall</h4>
+
+      <table>
+
+        <tbody>
+
+          <tr>
+            <td>Panahon</td>
+            <td>{panahon.toFixed(2)} mm</td>
+          </tr>
+
+          <tr>
+            <td>ECMWF</td>
+            <td>{ecmwf.toFixed(2)} mm</td>
+          </tr>
+
+        </tbody>
+
+      </table>
+
+      <hr/>
 
       <p>
         Not an observed flood extent
       </p>
 
     </div>
+
   );
 
 }

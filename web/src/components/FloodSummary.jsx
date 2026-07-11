@@ -1,79 +1,112 @@
 import "../styles/App.css";
 
-function FloodSummary({ summary }) {
+function SummarySection({ title, summary }) {
 
   return (
-    <div className="flood-summary">
+    <div className="summary-section">
 
-      <h3>Flood Summary</h3>
+      <h4>{title}</h4>
 
-      <div className="summary-section">
+      {/* Moderate */}
 
-        <h4>
-          Moderate Rainfall (60–180 mm)
-        </h4>
+      <h5>
+        Moderate Rainfall (60–180 mm)
+      </h5>
 
-        <p>
-          {summary.moderate.length} Sentinel Tile(s)
+      <p>
+        {summary.moderate.length} Sentinel Tile(s)
+      </p>
+
+      {summary.moderate.length > 0 ? (
+
+        <div className="tile-container">
+
+          {summary.moderate.map(tile => (
+
+            <span
+              key={tile}
+              className="tile-chip"
+            >
+              {tile}
+            </span>
+
+          ))}
+
+        </div>
+
+      ) : (
+
+        <p className="empty-summary">
+          None
         </p>
 
-        {summary.moderate.length > 0 ? (
+      )}
 
-          <div className="tile-container">
-            {summary.moderate.map(tile => (
-              <span
-                key={tile}
-                className="tile-chip"
-              >
-                {tile}
-              </span>
-            ))}
-          </div>
+      {/* Heavy */}
 
-        ) : (
+      <h5>
+        Heavy Rainfall (&gt;180 mm)
+      </h5>
 
-          <p className="empty-summary">
-            None
-          </p>
+      <p>
+        {summary.heavy.length} Sentinel Tile(s)
+      </p>
 
-        )}
+      {summary.heavy.length > 0 ? (
 
-      </div>
+        <div className="tile-container">
 
-      <div className="summary-section">
+          {summary.heavy.map(tile => (
 
-        <h4>
-          Heavy Rainfall (&gt;180 mm)
-        </h4>
+            <span
+              key={tile}
+              className="tile-chip"
+            >
+              {tile}
+            </span>
 
-        <p>
-          {summary.heavy.length} Sentinel Tile(s)
+          ))}
+
+        </div>
+
+      ) : (
+
+        <p className="empty-summary">
+          None
         </p>
 
-        {summary.heavy.length > 0 ? (
-
-          <div className="tile-container">
-            {summary.heavy.map(tile => (
-              <span
-                key={tile}
-                className="tile-chip"
-              >
-                {tile}
-              </span>
-            ))}
-          </div>
-
-        ) : (
-
-          <p className="empty-summary">
-            None
-          </p>
-
-        )}
-
-      </div>
+      )}
 
     </div>
+  );
+
+}
+
+function FloodSummary({
+  panahonSummary,
+  ecmwfSummary,
+}) {
+
+  return (
+
+    <div className="flood-summary">
+
+      <h3>
+        Flood Trigger Summary
+      </h3>
+
+      <SummarySection
+        title="Panahon API"
+        summary={panahonSummary}
+      />
+
+      <SummarySection
+        title="ECMWF Open Data"
+        summary={ecmwfSummary}
+      />
+
+    </div>
+
   );
 
 }

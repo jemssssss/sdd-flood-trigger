@@ -1,6 +1,12 @@
 from django.urls import path
 from . import views
 
-urlpatterns = [ 
-    path("point", views.point, name="ecmwf_point"),
+urlpatterns = [
+
+    path(
+        "footprints",
+        views.footprints,
+        name="ecmwf_footprints",
+    ),
+
 ]

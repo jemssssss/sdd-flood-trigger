@@ -4,28 +4,34 @@ import FootprintPopup from "../FootprintPopup";
 
 export function updateFootprintLayer({
   map,
+  sourceId,
+  fillLayerId,
+  outlineLayerId,
   footprints,
-  showFootprints,
+  visible,
   hasFitBounds,
   stationPopup,
-  footprintPopup
+  footprintPopup,
 }) {
 
-  if (map.getSource("footprints")) {
+  if (!footprints) return;
 
-    map.getSource("footprints").setData(footprints);
+  /* Source */
 
+  if (map.getSource(sourceId)) {
+    map.getSource(sourceId).setData(footprints);
   } else {
-
-    map.addSource("footprints", {
+    map.addSource(sourceId, {
       type: "geojson",
       data: footprints,
     });
 
+    /* Fill layer */
+
     map.addLayer({
-      id: "footprints-fill",
+      id: fillLayerId,
       type: "fill",
-      source: "footprints",
+      source: sourceId,
       paint: {
         "fill-color": [
           "step",
@@ -33,21 +39,25 @@ export function updateFootprintLayer({
           "#eef7ff",
           1, "#00e100",
           60, "#ffaa00",
-          180, "#ff0000"
+          180, "#ff0000",
         ],
-        "fill-opacity": 0.30
+        "fill-opacity": 0.30,
       },
     });
 
+    /* Outline layer */
+
     map.addLayer({
-      id: "footprints-outline",
+      id: outlineLayerId,
       type: "line",
-      source: "footprints",
+      source: sourceId,
       paint: {
         "line-color": "#1f78b4",
         "line-width": 2,
       },
     });
+
+    /* Keep stations on top */
 
     if (map.getLayer("synoptic-layer")) {
       map.moveLayer("synoptic-layer");
@@ -57,25 +67,29 @@ export function updateFootprintLayer({
       map.moveLayer("aws-layer");
     }
 
-    map.on("click", "footprints-fill", (e) => {
+    /* Popup */
 
+    map.on("click", fillLayerId, (e) => {
       const stations = map.queryRenderedFeatures(e.point, {
-        layers: ["synoptic-layer", "aws-layer"]
+        layers: [
+          "synoptic-layer",
+          "aws-layer",
+        ],
       });
 
       if (stations.length > 0) return;
 
       const feature = e.features[0];
-
       const popupNode = document.createElement("div");
       const root = createRoot(popupNode);
 
       root.render(
-        <FootprintPopup footprint={feature.properties} />
+        <FootprintPopup
+          footprint={feature.properties}
+        />
       );
 
       stationPopup.current.remove();
-
       footprintPopup.current
         .setLngLat(e.lngLat)
         .setDOMContent(popupNode)
@@ -83,18 +97,22 @@ export function updateFootprintLayer({
 
     });
 
-    map.on("mouseenter", "footprints-fill", () => {
+    /* Cursor */
+
+    map.on("mouseenter", fillLayerId, () => {
       map.getCanvas().style.cursor = "pointer";
     });
 
-    map.on("mouseleave", "footprints-fill", () => {
+    map.on("mouseleave", fillLayerId, () => {
       map.getCanvas().style.cursor = "";
     });
 
   }
 
+  /* Update style */
+
   map.setPaintProperty(
-    "footprints-fill",
+    fillLayerId,
     "fill-color",
     [
       "step",
@@ -102,30 +120,39 @@ export function updateFootprintLayer({
       "#eef7ff",
       1, "#00e100",
       60, "#ffaa00",
-      180, "#ff0000"
+      180, "#ff0000",
     ]
   );
 
+  /* Visibility */
+
   map.setLayoutProperty(
-    "footprints-fill",
+    fillLayerId,
     "visibility",
-    showFootprints ? "visible" : "none"
+    visible
+      ? "visible"
+      : "none"
   );
 
   map.setLayoutProperty(
-    "footprints-outline",
+    outlineLayerId,
     "visibility",
-    showFootprints ? "visible" : "none"
+    visible
+      ? "visible"
+      : "none"
   );
+
+  /* Zoom once */
 
   if (!hasFitBounds.current) {
-
     const bounds = bbox(footprints);
-
-    map.fitBounds(bounds, {
-      padding: 40,
-      duration: 1000,
-    });
+    map.fitBounds(
+      bounds,
+      {
+        padding: 40,
+        duration: 1000,
+      }
+    );
 
     hasFitBounds.current = true;
 

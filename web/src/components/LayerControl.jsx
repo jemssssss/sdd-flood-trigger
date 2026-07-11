@@ -8,8 +8,11 @@ function LayerControl({
 	showAWS,
 	setShowAWS,
 
-	showFootprints,
-	setShowFootprints
+	showPanahonFootprints,
+	setShowPanahonFootprints,
+
+	showEcmwfFootprints,
+	setShowEcmwfFootprints,
 
 }) {
 
@@ -51,13 +54,27 @@ function LayerControl({
 
 					<input
 						type="checkbox"
-						checked={showFootprints}
+						checked={showPanahonFootprints}
 						onChange={(e)=>
-							setShowFootprints(e.target.checked)
+							setShowPanahonFootprints(e.target.checked)
 						}
 					/>
 
-					Sentinel-1A Footprints
+					Footprints (Panahon)
+
+				</label>
+
+				<label>
+
+					<input
+						type="checkbox"
+						checked={showEcmwfFootprints}
+						onChange={(e)=>
+							setShowEcmwfFootprints(e.target.checked)
+						}
+					/>
+
+					Footprints (ECMWF)
 
 				</label>
 

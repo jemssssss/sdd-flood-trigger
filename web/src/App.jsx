@@ -12,11 +12,14 @@ function App() {
 
   const [synopticStations, setSynopticStations] = useState([]);
   const [awsStations, setAwsStations] = useState([]);
-  const [footprints, setFootprints] = useState(null);
-  const [floodSummary, setFloodSummary] = useState({moderate: [], heavy: []});
+  const [panahonFootprints, setPanahonFootprints] = useState(null);
+  const [ecmwfFootprints, setEcmwfFootprints] = useState(null);
+  const [panahonSummary, setPanahonSummary] = useState({ moderate: [], heavy: [], });
+  const [ecmwfSummary, setEcmwfSummary] = useState({ moderate: [], heavy: [], });
   const [showSynoptic, setShowSynoptic] = useState(true);
   const [showAWS, setShowAWS] = useState(true);
-  const [showFootprints, setShowFootprints] = useState(true);
+  const [showPanahonFootprints, setShowPanahonFootprints] = useState(true);
+  const [showEcmwfFootprints, setShowEcmwfFootprints] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -42,17 +45,24 @@ function App() {
         synopticResponse,
         awsResponse,
       ] = await Promise.all([
-
         fetch(`${BACKEND_URL}/panahon/synoptic`),
         fetch(`${BACKEND_URL}/panahon/aws`),
-
       ]);
 
-      const footprintResponse = await fetch(
-        `${import.meta.env.VITE_BACKEND_BASE_URL}/panahon/footprints` +
-        `?t=${encodeURIComponent(forecastTime)}` +
-        `&init=${encodeURIComponent(initTime)}`
-      );
+      const backend = import.meta.env.VITE_BACKEND_BASE_URL;
+      const [panahonResponse, ecmwfResponse] =
+      await Promise.all([
+        fetch(
+          `${backend}/panahon/footprints` +
+          `?t=${encodeURIComponent(forecastTime)}` +
+          `&init=${encodeURIComponent(initTime)}`
+        ),
+        fetch(
+          `${backend}/ecmwf/footprints` +
+          `?t=${encodeURIComponent(forecastTime)}` +
+          `&init=${encodeURIComponent(initTime)}`
+        )
+      ]);
 
       if (
         !synopticResponse.ok ||
@@ -61,18 +71,31 @@ function App() {
         throw new Error("Backend request for rainfall stations failed.");
       }
 
-      if (!footprintResponse.ok) {
-        throw new Error("Failed to compute footprints.");
+      if (!panahonResponse.ok) {
+        throw new Error("Failed to compute footprints (Panahon data).");
+      }
+
+      if (!ecmwfResponse.ok) {
+        throw new Error("Failed to compute footprints (ECMWF data).");
       }
 
       const synopticStations = await synopticResponse.json();
       const awsStations = await awsResponse.json();
-      const footprintResult = await footprintResponse.json();
+      const panahonData = await panahonResponse.json();
+      const ecmwfData = await ecmwfResponse.json();
 
       console.table(synopticStations);
       console.table(awsStations);
+      console.log("Panahon API Data");
       console.table(
-        footprintResult.geojson.features.map(feature => ({
+        panahonData.geojson.features.map(feature => ({
+          tile: feature.properties.TileNumber,
+          rainfall: feature.properties.averageRainfall
+        }))
+      );
+      console.log("ECMWF API Data");
+      console.table(
+        ecmwfData.geojson.features.map(feature => ({
           tile: feature.properties.TileNumber,
           rainfall: feature.properties.averageRainfall
         }))
@@ -80,8 +103,10 @@ function App() {
 
       setSynopticStations(synopticStations);
       setAwsStations(awsStations);
-      setFootprints(footprintResult.geojson);
-      setFloodSummary(footprintResult.summary);
+      setPanahonFootprints(panahonData.geojson);
+      setPanahonSummary(panahonData.summary);
+      setEcmwfFootprints(ecmwfData.geojson);
+      setEcmwfSummary(ecmwfData.summary);
 
     }
 
@@ -138,15 +163,19 @@ function App() {
               showAWS={showAWS}
               setShowAWS={setShowAWS}
 
-              showFootprints={showFootprints}
-              setShowFootprints={setShowFootprints}
+              showPanahonFootprints={showPanahonFootprints}
+              setShowPanahonFootprints={setShowPanahonFootprints}
+
+              showEcmwfFootprints={showEcmwfFootprints}
+              setShowEcmwfFootprints={setShowEcmwfFootprints}
 
             />
 
             <FloodSummary
 
-              summary={floodSummary}
-
+              panahonSummary={panahonSummary}
+              ecmwfSummary={ecmwfSummary}
+              
             />
 
             <MapView
@@ -156,9 +185,11 @@ function App() {
 
               showSynoptic={showSynoptic}
               showAWS={showAWS}
-              showFootprints={showFootprints}
+              showPanahonFootprints={showPanahonFootprints}
+              showEcmwfFootprints={showEcmwfFootprints}
 
-              footprints={footprints}
+              panahonFootprints={panahonFootprints}
+              ecmwfFootprints={ecmwfFootprints}
 
             />
 
