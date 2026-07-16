@@ -79,7 +79,7 @@ def compute_ecmwf_footprints(
 
         average = float(np.mean(values))
 
-        row["averageRainfall"] = average
+        row["ecmwfRainfall"] = average
         if 60 <= average <= 180:
 
             summary["moderate"].append(
@@ -93,7 +93,7 @@ def compute_ecmwf_footprints(
 
         footprints.loc[
             row.name,
-            "averageRainfall",
+            "ecmwfRainfall",
         ] = average
 
     summary["moderate"].sort()

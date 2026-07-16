@@ -3,7 +3,8 @@ import { createRoot } from "react-dom/client";
 import StationPopup from "./StationPopup";
 import FootprintPopup from "./FootprintPopup";
 import { updateStationLayer } from "./map/stationLayer";
-import { updateFootprintLayer } from "./map/footprintLayer";
+import { updatePanahonLayer } from "./map/panahonTileLayer";
+import { updateECMWFLayer } from "./map/ecmwfTileLayer";
 import maplibregl from "maplibre-gl";
 import bbox from "@turf/bbox";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -13,9 +14,8 @@ function MapView({
   awsStations, 
   showSynoptic, 
   showAWS, 
-  panahonFootprints, 
+  footprints, 
   showPanahonFootprints, 
-  ecmwfFootprints, 
   showEcmwfFootprints 
 }) {
   /* Map general settings */
@@ -109,16 +109,16 @@ function MapView({
   /* Rendered footprints (Panahon) */
   useEffect(() => {
 
-  if (!map.current || !panahonFootprints) return;
+  if (!map.current || !footprints) return;
 
   const renderFootprints = () => {
 
-    updateFootprintLayer({
+    updatePanahonLayer({
       map: map.current,
       sourceId: "panahon-footprints",
       fillLayerId: "panahon-fill",
       outlineLayerId: "panahon-outline",
-      footprints: panahonFootprints,
+      footprints: footprints,
       visible: showPanahonFootprints,
       hasFitBounds,
       stationPopup,
@@ -141,21 +141,21 @@ function MapView({
     map.current.once("load", renderFootprints);
   }
 
-}, [panahonFootprints, showPanahonFootprints]);
+}, [footprints, showPanahonFootprints]);
 
 /* Rendered footprints (ECMWF) */
   useEffect(() => {
 
-  if (!map.current || !ecmwfFootprints) return;
+  if (!map.current || !footprints) return;
 
   const renderFootprints = () => {
 
-    updateFootprintLayer({
+    updateECMWFLayer({
       map: map.current,
       sourceId: "ecmwf-footprints",
       fillLayerId: "ecmwf-fill",
       outlineLayerId: "ecmwf-outline",
-      footprints: ecmwfFootprints,
+      footprints: footprints,
       visible: showEcmwfFootprints,
       hasFitBounds,
       stationPopup,
@@ -178,7 +178,7 @@ function MapView({
     map.current.once("load", renderFootprints);
   }
 
-}, [ecmwfFootprints, showEcmwfFootprints]);
+}, [footprints, showEcmwfFootprints]);
 
 /* Clean up when the component unmounts */
 useEffect(() => {

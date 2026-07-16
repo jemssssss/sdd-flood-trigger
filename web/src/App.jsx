@@ -12,14 +12,16 @@ function App() {
 
   const [synopticStations, setSynopticStations] = useState([]);
   const [awsStations, setAwsStations] = useState([]);
-  const [panahonFootprints, setPanahonFootprints] = useState(null);
-  const [ecmwfFootprints, setEcmwfFootprints] = useState(null);
+
+  const [footprints, setFootprints] = useState(null);
   const [panahonSummary, setPanahonSummary] = useState({ moderate: [], heavy: [], });
   const [ecmwfSummary, setEcmwfSummary] = useState({ moderate: [], heavy: [], });
+
   const [showSynoptic, setShowSynoptic] = useState(true);
   const [showAWS, setShowAWS] = useState(true);
   const [showPanahonFootprints, setShowPanahonFootprints] = useState(true);
   const [showEcmwfFootprints, setShowEcmwfFootprints] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -97,15 +99,27 @@ function App() {
       console.table(
         ecmwfData.geojson.features.map(feature => ({
           tile: feature.properties.TileNumber,
-          rainfall: feature.properties.averageRainfall
+          rainfall: feature.properties.ecmwfRainfall
         }))
       );
 
       setSynopticStations(synopticStations);
       setAwsStations(awsStations);
-      setPanahonFootprints(panahonData.geojson);
+      
+      const merged = structuredClone(panahonData.geojson);
+      merged.features.forEach((feature) => {
+        const tile = feature.properties.TileNumber;
+        const ecmwfFeature =
+          ecmwfData.geojson.features.find(
+            f => f.properties.TileNumber === tile
+          );
+
+        feature.properties.ecmwfRainfall =
+          ecmwfFeature?.properties.ecmwfRainfall ?? null;
+      });
+      setFootprints(merged);
+
       setPanahonSummary(panahonData.summary);
-      setEcmwfFootprints(ecmwfData.geojson);
       setEcmwfSummary(ecmwfData.summary);
 
     }
@@ -182,14 +196,12 @@ function App() {
 
               synopticStations={synopticStations}
               awsStations={awsStations}
+              footprints={footprints}
 
               showSynoptic={showSynoptic}
               showAWS={showAWS}
               showPanahonFootprints={showPanahonFootprints}
               showEcmwfFootprints={showEcmwfFootprints}
-
-              panahonFootprints={panahonFootprints}
-              ecmwfFootprints={ecmwfFootprints}
 
             />
 

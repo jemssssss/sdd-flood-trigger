@@ -2,7 +2,7 @@ import { createRoot } from "react-dom/client";
 import bbox from "@turf/bbox";
 import FootprintPopup from "../FootprintPopup";
 
-export function updateFootprintLayer({
+export function updateECMWFLayer({
   map,
   sourceId,
   fillLayerId,
@@ -35,7 +35,7 @@ export function updateFootprintLayer({
       paint: {
         "fill-color": [
           "step",
-          ["coalesce", ["get", "averageRainfall"], 0],
+          ["coalesce", ["get", "ecmwfRainfall"], 0],
           "#eef7ff",
           1, "#00e100",
           60, "#ffaa00",
@@ -116,7 +116,7 @@ export function updateFootprintLayer({
     "fill-color",
     [
       "step",
-      ["coalesce", ["get", "averageRainfall"], 0],
+      ["coalesce", ["get", "ecmwfRainfall"], 0],
       "#eef7ff",
       1, "#00e100",
       60, "#ffaa00",

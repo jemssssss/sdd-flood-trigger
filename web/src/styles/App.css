@@ -151,9 +151,14 @@
 
 .flood-summary {
     position: absolute;
-    top: 210px;
+    top: 230px;
     left: 20px;
     width: 220px;
+
+    max-height: 200px;
+    overflow-y: auto;
+    overflow-x: hidden;
+
     background: rgba(255,255,255,.95);
     border-radius: 10px;
     padding: 15px;
@@ -168,7 +173,7 @@
 }
 
 .summary-section {
-    margin-bottom: 18px;
+    margin-bottom: 20px;
 }
 
 .summary-section:last-child {
@@ -176,14 +181,21 @@
 }
 
 .summary-section h4 {
-    margin: 0 0 6px;
+    margin: 0 0 8px;
     color: #154360;
-    font-size: .95rem;
+    font-size: 0.95rem;
+}
+
+.summary-section h5 {
+    margin: 12px 0 6px;
+    color: #4a5568;
+    font-size: 0.85rem;
+    font-weight: 600;
 }
 
 .summary-section p {
     margin: 0 0 8px;
-    font-size: .85rem;
+    font-size: 0.85rem;
     font-weight: 600;
 }
 
@@ -191,6 +203,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+    margin-bottom: 10px;
 }
 
 .tile-chip {
@@ -212,4 +225,26 @@
     margin: 0;
     color: #777;
     font-style: italic;
+}
+
+.flood-summary::-webkit-scrollbar {
+    width: 8px;
+}
+
+.flood-summary::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.flood-summary::-webkit-scrollbar-thumb {
+    background: #b8c2cc;
+    border-radius: 4px;
+}
+
+.flood-summary::-webkit-scrollbar-thumb:hover {
+    background: #8c98a5;
+}
+
+.flood-summary {
+    scrollbar-width: thin;
+    scrollbar-color: #b8c2cc transparent;
 }

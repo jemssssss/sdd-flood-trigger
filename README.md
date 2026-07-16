@@ -2,7 +2,7 @@
 
 A web-based rainfall visualization dashboard built with **React**, **Vite**, **MapLibre GL JS**, and a lightweight **Django backend**.
 
-The application retrieves **Synoptic Station**, **Automatic Weather Station (AWS)**, and **Sentinel-1A footprint rainfall** from the **Panahon API** through backend service endpoints. The backend also provides the foundation for future **ECMWF Open Data**, **PostgreSQL/PostGIS**, and additional Python-based geospatial services.
+The application retrieves **Synoptic Station**, **Automatic Weather Station (AWS)**, and **Sentinel-1A footprint rainfall** from the **Panahon API** and **ECMWF Open Data** (via **earthkit-data API**) through backend service endpoints. Rainfall data from each source is processed independently before being visualized on the frontend. The architecture also provides the foundation for future **PostgreSQL/PostGIS** integration and additional Python-based geospatial services.
 
 ![SDD Flood Trigger Preview](/docs/dashboard_preview.png)
 
@@ -22,7 +22,8 @@ The application retrieves **Synoptic Station**, **Automatic Weather Station (AWS
   - AWS Stations
   - Sentinel-1A Footprints
 - Displays Sentinel-1 footprint polygons
-- Computes average 24-hour accumulated forecast rainfall for every footprint
+- Computes average 24-hour accumulated forecast rainfall from the Panahon API for every footprint
+- Computes average 24-hour accumulated rainfall from ECMWF Open Data for every footprint
 - Uses pre-generated sampling points for reproducible rainfall averaging
 - Summarizes list of Sentinel-1A tiles showing signs of flooding
 - Color-coded rainfall stations
@@ -36,7 +37,6 @@ The application retrieves **Synoptic Station**, **Automatic Weather Station (AWS
 - Backend Sentinel footprint sampling service
 - Backend rainfall parsing service
 - Cached point rainfall requests
-- Designed for future ECMWF Open Data integration
 - Prepared for PostgreSQL/PostGIS integration
 
 ---
@@ -51,10 +51,15 @@ The application retrieves **Synoptic Station**, **Automatic Weather Station (AWS
 | React | 19.2.7 |
 | Python | 3.13.14 |
 | Django | 6.0.7 |
+| Earthkit-data | 0.20.0 |
+| Xarray | 2026.7.0 |
+| NumPy | 2.5.1 |
 | MapLibre GL JS | Latest compatible version |
 | Turf.js | Latest compatible version |
 | Requests | Latest compatible version |
 | httpx | Latest compatible version |
+| SciPy | Latest compatible version |
+| GeoPandas | Latest compatible version |
 
 ---
 
@@ -232,7 +237,11 @@ backend/
 │
 ├── services/
 │   ├── ecmwf/
-│   │   └── point.py
+│   │   ├── dataset.py
+│   │   ├── datetime.py
+│   │   ├── footprint.py
+│   │   ├── json_utils.py
+│   │   └── sampler.py
 │   │
 │   ├── panahon/
 │   │   ├── client.py
@@ -254,7 +263,8 @@ web/
 └── src/
     ├── components/
     │   ├── map/
-    │   │   ├── footprintLayer.jsx
+    │   │   ├── ecmwfTileLayer.jsx
+    │   │   ├── panahonTileLayer.jsx
     │   │   └── stationLayer.jsx
     │   │
     │   ├── EcmwfPointTest.jsx
@@ -286,7 +296,9 @@ web/
 # Application Workflow
 
 ```text
-                    Panahon API
+      Panahon API                 earthkit-data API
+          │                               │
+          └──────────────┬────────────────┘
                          │
                          ▼
                 Django Backend Services
@@ -358,9 +370,9 @@ Although the endpoint returns hourly rainfall, this dashboard visualizes the **2
 
 ---
 
-## Forecast Rainfall Sampling
+## Panahon Forecast Rainfall Sampling
 
-Forecast rainfall is retrieved from:
+Panahon Forecast rainfall is retrieved from:
 
 ```text
 React
@@ -385,6 +397,54 @@ using:
 - API token
 
 Forecast timestamps are generated automatically using `timeUtils.js`.
+
+---
+
+## ECMWF Open Data Integration
+
+The dashboard also supports rainfall visualization from ECMWF Open Data.
+
+Rainfall is downloaded on demand using Earthkit-data and processed on the backend before being sent to the frontend.
+
+Unlike the Panahon API, ECMWF rainfall is computed directly from the model raster.
+
+Workflow:
+
+```text
+Earthkit
+
+↓
+
+Download GRIB
+
+↓
+
+Convert to Xarray
+
+↓
+
+Convert Total Precipitation to millimeters
+
+↓
+
+Extract rainfall values inside each Sentinel footprint
+
+↓
+
+Compute average rainfall
+
+↓
+
+Return GeoJSON to React
+```
+
+The backend automatically:
+
+- downloads the requested forecast
+- converts GRIB to Xarray
+- extracts rainfall inside every Sentinel-1A footprint
+- computes average rainfall
+- returns GeoJSON to the frontend
 
 ---
 
@@ -502,7 +562,7 @@ Example normalized AWS rainfall station response:
 
 ---
 
-# API Field Mapping
+# Panahon API Field Mapping
 
 | Panahon API | Parsed Field | Description |
 |-------------|--------------|-------------|
@@ -554,14 +614,34 @@ Advantages:
 
 For every footprint:
 
+## Panahon API
+
 1. Load predefined sample points.
-2. Fetch rainfall at every point.
+2. Request rainfall from the Panahon API.
 3. Execute requests concurrently.
-4. Compute the arithmetic mean.
-5. Store as:
+4. Cache repeated point requests.
+5. Compute the arithmetic mean.
+6. Store as:
 
 ```javascript
 feature.properties.averageRainfall
+```
+
+---
+
+## ECMWF Open Data
+
+1. Download the requested ECMWF forecast.
+2. Convert GRIB to an Xarray dataset.
+3. Convert total precipitation to millimeters.
+4. Build a KD-tree from the ECMWF grid.
+5. Find every raster cell intersecting the footprint.
+6. Compute the arithmetic mean.
+7. Fall back to the nearest grid cell if no raster cells intersect.
+8. Store as:
+
+```javascript
+feature.properties.ecmwfRainfall
 ```
 
 ---
@@ -572,7 +652,8 @@ The dashboard includes a control panel that allows users to independently toggle
 
 - Synoptic Stations
 - AWS Stations
-- Sentinel-1A Footprints
+- Footprints (Panahon)
+- Footprints (ECMWF)
 
 Layer visibility is managed using MapLibre's `layout.visibility` property without reloading map sources.
 
@@ -607,7 +688,8 @@ Clicking a Sentinel-1A footprint displays:
 - Forecasted Date
 - Sensing Time (AM/PM)
 - Sampling Points Used
-- Forecast Accumulated Rainfall (mm)
+- Panahon API Forecast Rainfall (24 h)
+- ECMWF Open Data Rainfall (24 h)
 
 ![Sentinel-1A Footprint Popup](/docs/footprint_popup.png)
 
@@ -647,6 +729,12 @@ The application provides feedback during data retrieval.
 - Footprint sampling is now performed on the backend.
 - API tokens remain on the backend.
 - React now focuses primarily on visualization.
+- Earthkit-data downloads ECMWF Open Data forecasts on demand.
+- ECMWF rainfall is calculated directly from raster cells instead of sampling discrete points.
+- KD-tree nearest-neighbor search is used as a fallback when a footprint does not intersect any ECMWF grid cell.
+- Panahon API requests are executed concurrently using asyncio and httpx.
+- Duplicate sampling points are automatically removed before requesting rainfall.
+- Cached point requests reduce repeated API calls during subsequent refreshes.
 
 ---
 
@@ -656,11 +744,19 @@ The Django backend currently provides lightweight API services for the frontend.
 
 Implemented services include:
 
-- Health endpoint
-- Panahon Synoptic endpoint
-- Panahon AWS endpoint
-- Panahon Point Rainfall endpoint
-- Panahon Sentinel Footprint Sampling endpoint
+Panahon
+
+- Synoptic endpoint
+- AWS endpoint
+- Point rainfall endpoint
+- Sentinel footprint sampling endpoint
+
+ECMWF
+
+- Dataset endpoint
+- Footprint rainfall endpoint
+- Forecast datetime conversion service
+- Earthkit dataset loader
 
 These services simplify the frontend while preparing the project for future migration to database-backed processing.
 
@@ -725,5 +821,51 @@ Verify:
 - the generated forecast timestamp matches the latest available forecast
 - `footprintSamplePoints.json` contains valid coordinates
 - the Panahon forecast endpoint returns valid values
+
+---
+
+## ECMWF Download Errors
+
+Possible causes:
+
+- corrupted local Earthkit cache
+- interrupted GRIB download
+- temporary ECMWF Open Data service issue
+
+Recommended fixes:
+
+- clear the Earthkit cache
+- retry the request
+- verify the requested forecast initialization time exists
+
+---
+
+## Panahon API Rate Limiting
+
+```text
+429 Too Many Requests
+```
+
+Possible cause:
+
+- too many simultaneous point requests
+
+Recommended fixes:
+
+- reduce the number of sampling points
+- reduce concurrent requests
+- rely on backend caching for repeated requests
+
+---
+
+## Incorrect Panahon Rainfall (All Zero)
+
+Verify:
+
+- forecast timestamp exists
+- initialization timestamp matches the forecast
+- Panahon API returns non-zero rainfall for the requested period
+- cached responses are not stale
+- sampling coordinates are valid
 
 ---

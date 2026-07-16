@@ -2,6 +2,7 @@ import asyncio
 import json
 from pathlib import Path
 import httpx
+import statistics
 from django.conf import settings
 
 ROOT = settings.BASE_DIR.parent
@@ -192,10 +193,13 @@ async def compute_worker(
             rainfall.append(
                 rainfall_cache[key]
             )
-
+        # print(rainfall)
         average = (
-            sum(rainfall)
-            / len(rainfall)
+            # sum(rainfall)
+            # / len(rainfall)
+            # or
+            # statistics.mean(rainfall)
+            max(rainfall)
         )
 
         feature["properties"]["averageRainfall"] = average

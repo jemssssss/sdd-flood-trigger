@@ -8,8 +8,11 @@ function classify(mm) {
 
 function FootprintPopup({ footprint }) {
 
+  console.log(footprint.averageRainfall);
+  console.log(footprint.ecmwfRainfall);
+
   const SAMPLE_POINTS = Number(import.meta.env.VITE_SAMPLING_POINTS ?? 7);
-  const panahon = Number(footprint.panahonRainfall ?? 0);
+  const panahon = Number(footprint.averageRainfall ?? 0);
   const ecmwf = Number(footprint.ecmwfRainfall ?? 0);
 
   return (
@@ -63,7 +66,7 @@ function FootprintPopup({ footprint }) {
       <hr/>
 
       <p>
-        Not an observed flood extent
+        Not an observed flood extent.
       </p>
 
     </div>
