@@ -2,7 +2,7 @@
 
 A web-based rainfall visualization dashboard built with **React**, **Vite**, **MapLibre GL JS**, and a lightweight **Django backend**.
 
-The application retrieves **Synoptic Station**, **Automatic Weather Station (AWS)**, and **Sentinel-1A footprint rainfall** from the **Panahon API** and **ECMWF Open Data** (via **earthkit-data API**) through backend service endpoints. Rainfall data from each source is processed independently before being visualized on the frontend. The architecture also provides the foundation for future **PostgreSQL/PostGIS** integration and additional Python-based geospatial services.
+The application retrieves **Synoptic Station**, **Automatic Weather Station (AWS)**, and **Sentinel-1A footprint rainfall** from the **Panahon API** and **ECMWF Open Data** (via **earthkit-data API**) through backend service endpoints. Rainfall data from each source is processed independently before being visualized on the frontend. Sentinel footprint layers are pass-aware: only the strip scheduled to pass over the Philippines on the forecast date is processed and displayed. The architecture also provides the foundation for future **PostgreSQL/PostGIS** integration and additional Python-based geospatial services.
 
 ![SDD Flood Trigger Preview](/docs/dashboard_preview.png)
 
@@ -19,11 +19,11 @@ The application retrieves **Synoptic Station**, **Automatic Weather Station (AWS
 - Displays AWS rainfall observations (24-hour accumulated rainfall)
 - Layer control panel for toggling:
   - Synoptic Stations
-  - AWS Stations
-  - Sentinel-1A Footprints
-- Displays Sentinel-1 footprint polygons
-- Computes average 24-hour accumulated forecast rainfall from the Panahon API for every footprint
-- Computes average 24-hour accumulated rainfall from ECMWF Open Data for every footprint
+  - Automatic Weather Stations (AWS)
+  - Sentinel-1A Passes
+- Displays Sentinel-1A footprints only when a configured strip passes on the forecast date
+- Computes 24-hour accumulated forecast rainfall from the Panahon API for every footprint in the passing strip
+- Computes average 24-hour accumulated rainfall from ECMWF Open Data for every footprint in the passing strip
 - Uses pre-generated sampling points for reproducible rainfall averaging
 - Summarizes list of Sentinel-1A tiles showing signs of flooding
 - Color-coded rainfall stations
@@ -138,8 +138,8 @@ Create a `.env` file.
 
 ```env
 VITE_BACKEND_BASE_URL=http://localhost:8000
-SENSING_TIME=sensing_time_here
-SAMPLING_POINTS=sample_points_here
+VITE_SENSING_TIME=6
+VITE_SAMPLING_POINTS=7
 ```
 
 ## Backend
@@ -148,7 +148,14 @@ SAMPLING_POINTS=sample_points_here
 PANAHON_API_TOKEN=YOUR_API_TOKEN
 ```
 
-Sensing time and sampling points are variables that can be changed according to the user's needs.
+`VITE_SENSING_TIME` and `VITE_SAMPLING_POINTS` are optional frontend display settings; the application uses `6` and `7` respectively when they are absent. Satellite selection does not require a frontend environment variable: the backend defaults to Sentinel-1A.
+
+The Django settings read `PANAHON_API_TOKEN` from the backend process environment. In Windows Command Prompt, set it before starting Django:
+
+```cmd
+set PANAHON_API_TOKEN=YOUR_API_TOKEN
+python manage.py runserver 127.0.0.1:8000
+```
 
 Obtain a valid Panahon API token from your project supervisor.
 
@@ -165,9 +172,10 @@ Ensure `.env` is ignored.
 A sample `.env.example` may be committed.
 
 ```env
-VITE_PANAHON_API_TOKEN=
-SENSING_TIME=
-SAMPLING_POINTS=
+VITE_BACKEND_BASE_URL=http://localhost:8000
+VITE_SENSING_TIME=6
+VITE_SAMPLING_POINTS=7
+# Set PANAHON_API_TOKEN only in the backend runtime environment.
 ```
 
 ---
@@ -208,7 +216,7 @@ The project is configured to deploy from the **gh-pages** branch.
 
 > **Note**
 >
-> Since this application currently performs API requests entirely on the frontend, the Panahon API token is included in the production bundle. A backend proxy is recommended for production deployments.
+> The frontend calls the Django API; the Panahon API token remains on the backend. GitHub Pages can host only the static frontend, so production deployment requires a separately deployed Django API with HTTPS, CORS configuration, and `VITE_BACKEND_BASE_URL` set to that API URL at build time.
 
 ---
 
@@ -245,11 +253,12 @@ backend/
 │   │
 │   ├── panahon/
 │   │   ├── client.py
-│   │   └── parser.py
+│   │   ├── footprint.py
+│   │   ├── parser.py
+│   │   └── point.py
 │   │
 │   └── sentinel/
-│       ├── footprint.py
-│       └── point.py
+│       └── passes.py
 │       
 ├── manage.py
 └── requirements.txt
@@ -320,6 +329,47 @@ web/
 
 ---
 
+## Current API Endpoints
+
+The React app requests the following Django endpoints:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health/` | Backend health check |
+| `GET /panahon/synoptic` | Normalized Synoptic station observations |
+| `GET /panahon/aws` | Normalized AWS station observations |
+| `GET /panahon/footprints?t=<forecast>&init=<initialization>` | Pass-filtered Sentinel footprint rainfall from Panahon |
+| `GET /ecmwf/footprints?t=<forecast>&init=<initialization>` | Pass-filtered Sentinel footprint rainfall from ECMWF Open Data |
+
+The legacy `/sentinel/footprints` route is currently an alias for the Panahon footprint route. New frontend code uses `/panahon/footprints`.
+
+---
+
+# Sentinel Pass Filtering
+
+The backend uses the **forecast timestamp**, not the forecast initialization timestamp, to determine whether a configured satellite strip passes over the Philippines. For Sentinel-1A, each configured strip repeats every 12 days.
+
+1. React sends `t` (forecast time) and `init` (forecast initialization time) to both footprint endpoints.
+2. The backend checks the forecast date against the configured satellite pass schedule.
+3. If a strip passes, only GeoJSON features whose `TileNumber` begins with that strip letter are sampled and returned.
+4. If no strip passes, the API returns a valid empty GeoJSON `FeatureCollection`, empty summaries, and `passInfo`; no Panahon point requests or ECMWF download are performed.
+5. The frontend shows the strip or **No Satellite Pass** and does not render empty footprint layers.
+
+For example, a returned `passInfo` object has this shape:
+
+```json
+{
+  "satellite": "Sentinel-1A",
+  "passDate": "2026-07-18",
+  "hasPass": true,
+  "strip": "A"
+}
+```
+
+Satellite schedules and footprint filenames are defined in `backend/services/sentinel/passes.py`. To add a future satellite such as Sentinel-1C, add its aliases, repeat period, strip reference dates, and GeoJSON filename to the `SATELLITES` registry after its footprint file is available. The Panahon and ECMWF services already resolve these values from the registry.
+
+---
+
 # Panahon API Integration
 
 ## Synoptic Stations
@@ -378,7 +428,7 @@ Panahon Forecast rainfall is retrieved from:
 React
 ↓
 
-GET /sentinel/footprints
+GET /panahon/footprints?t=<forecast>&init=<initialization>
 
 ↓
 
@@ -396,7 +446,7 @@ using:
 - forecast timestamp
 - API token
 
-Forecast timestamps are generated automatically using `timeUtils.js`.
+Forecast timestamps are generated automatically using `timeUtils.js`. The forecast timestamp determines the Sentinel strip; the initialization timestamp remains part of the rainfall forecast request.
 
 ---
 
@@ -442,7 +492,7 @@ The backend automatically:
 
 - downloads the requested forecast
 - converts GRIB to Xarray
-- extracts rainfall inside every Sentinel-1A footprint
+- filters to the scheduled Sentinel strip, then extracts rainfall inside its footprints
 - computes average rainfall
 - returns GeoJSON to the frontend
 
@@ -590,6 +640,11 @@ Each footprint:
 - displays forecasted total rainfall accumulated over the past 24 hours from sensing time
 - is color-coded
 - supports interactive popups
+- is included only when its strip is scheduled to pass on the forecast date
+
+Below is a sample dashboard view when there is no satellite pass.
+
+![No Satellite Pass Preview](/docs/no_pass.png)
 
 ---
 
@@ -620,7 +675,7 @@ For every footprint:
 2. Request rainfall from the Panahon API.
 3. Execute requests concurrently.
 4. Cache repeated point requests.
-5. Compute the arithmetic mean.
+5. Select the maximum sampled rainfall value for the footprint (stored in the existing `averageRainfall` property for compatibility).
 6. Store as:
 
 ```javascript
@@ -712,22 +767,22 @@ The application provides feedback during data retrieval.
 - Layer rendering has been modularized into dedicated map layer components.
 - Turf.js generated the initial sampling points.
 - Sampling points are reused between application runs.
-- For every Sentinel-1A footprint:
-  1. Django loads the footprint GeoJSON.
+- For every footprint in the Sentinel strip scheduled for the forecast date:
+  1. Django loads the satellite-specific footprint GeoJSON from the satellite registry.
   2. Django loads the predefined sampling points.
   3. Each sampling point requests 24-hour accumulated rainfall from the Panahon API.
   4. Results are cached to avoid duplicate requests.
-  5. The arithmetic mean is computed.
+  5. The maximum sampled Panahon rainfall value is selected.
   6. The average rainfall is stored in the GeoJSON feature.
   7. Flood summary tiles are generated.
   8. The completed GeoJSON is returned to React.
-- Forecast timestamps are generated dynamically.
+- Forecast timestamps are generated dynamically; the forecast timestamp determines the visible Sentinel strip.
 - API responses are normalized before visualization.
 - Environment variables are accessed using `import.meta.env`.
 - Django serves as the backend API layer.
 - Rainfall parsing has been migrated from React to Python.
 - Footprint sampling is now performed on the backend.
-- API tokens remain on the backend.
+- API tokens remain on the backend; `PANAHON_API_TOKEN` is read from the Django process environment.
 - React now focuses primarily on visualization.
 - Earthkit-data downloads ECMWF Open Data forecasts on demand.
 - ECMWF rainfall is calculated directly from raster cells instead of sampling discrete points.
@@ -760,6 +815,8 @@ ECMWF
 
 These services simplify the frontend while preparing the project for future migration to database-backed processing.
 
+The active Panahon footprint service is invoked by `apps/panahon/views.py`; Sentinel pass scheduling is provided by `services/sentinel/passes.py`. The `SATELLITES` registry also supplies the footprint GeoJSON filename, which keeps the active services ready for additional satellite datasets.
+
 ---
 
 # Troubleshooting
@@ -767,14 +824,20 @@ These services simplify the frontend while preparing the project for future migr
 ## Missing API Token
 
 ```
-Missing VITE_PANAHON_API_TOKEN
+PANAHON_API_TOKEN is not set
 ```
 
 Verify:
 
 - `.env` exists
-- the token is defined
+- `PANAHON_API_TOKEN` is defined for the Django process
 - the development server has been restarted
+
+## No Footprints Displayed
+
+First check the satellite pass status card. **No Satellite Pass** means the selected forecast date does not match a configured Sentinel strip, so empty Panahon and ECMWF footprint tables are expected. This is not a map-rendering error.
+
+For Sentinel-1A, verify that the forecast date is one of the configured 12-day strip passes in `backend/services/sentinel/passes.py`. On a pass date, also verify that the matching `TileNumber` prefix is present in `web/public/data/s1a_footprints.geojson`.
 
 ---
 

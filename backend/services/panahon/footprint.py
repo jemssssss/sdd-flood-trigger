@@ -4,16 +4,9 @@ from pathlib import Path
 import httpx
 import statistics
 from django.conf import settings
+from services.sentinel.passes import (DEFAULT_SATELLITE, get_satellite_config, get_sentinel_pass_info)
 
 ROOT = settings.BASE_DIR.parent
-
-FOOTPRINT_FILE = (
-    ROOT
-    / "web"
-    / "public"
-    / "data"
-    / "s1a_footprints.geojson"
-)
 
 SAMPLE_FILE = (
     ROOT
@@ -78,18 +71,37 @@ async def fetch_point(
 async def compute_worker(
     forecast_time,
     init_time,
+    satellite,
 ):
 
     # -----------------------
     # Read files
     # -----------------------
 
+    satellite_config = get_satellite_config(satellite)
+    footprint_file = ROOT / "web" / "public" / "data" / satellite_config["footprintFile"]
+
     with open(
-        FOOTPRINT_FILE,
+        footprint_file,
         encoding="utf-8",
     ) as f:
 
         geojson = json.load(f)
+
+    pass_info = get_sentinel_pass_info(satellite, forecast_time)
+    strip = pass_info["strip"]
+    geojson["features"] = [
+        feature
+        for feature in geojson["features"]
+        if strip and feature["properties"].get("TileNumber", "").startswith(strip)
+    ]
+
+    if not strip:
+        return {
+            "geojson": geojson,
+            "summary": {"moderate": [], "heavy": []},
+            "passInfo": pass_info,
+        }
 
     with open(
         SAMPLE_FILE,
@@ -218,17 +230,20 @@ async def compute_worker(
     return {
         "geojson": geojson,
         "summary": summary,
+        "passInfo": pass_info,
     }
 
 
 def compute_footprints(
     forecast_time,
     init_time,
+    satellite=DEFAULT_SATELLITE,
 ):
 
     return asyncio.run(
         compute_worker(
             forecast_time,
             init_time,
+            satellite,
         )
     )

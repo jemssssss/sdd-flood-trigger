@@ -5,22 +5,41 @@ from shapely.geometry import Point
 from django.conf import settings
 from services.ecmwf.datetime import (build_ecmwf_request)
 from services.ecmwf.sampler import (load_rainfall_dataset)
+from services.sentinel.passes import (DEFAULT_SATELLITE, get_satellite_config, get_sentinel_pass_info)
 
 ROOT = settings.BASE_DIR.parent
-
-FOOTPRINT_FILE = (
-    ROOT
-    / "web"
-    / "public"
-    / "data"
-    / "s1a_footprints.geojson"
-)
-
 
 def compute_ecmwf_footprints(
     forecast_time,
     init_time,
+    satellite=DEFAULT_SATELLITE,
 ):
+
+    satellite_config = get_satellite_config(satellite)
+    pass_info = get_sentinel_pass_info(satellite, forecast_time)
+    strip = pass_info["strip"]
+    footprint_file = ROOT / "web" / "public" / "data" / satellite_config["footprintFile"]
+
+    footprints = gpd.read_file(footprint_file)
+    footprints = footprints.set_crs(
+        "EPSG:4326",
+        allow_override=True,
+    )
+    footprints = footprints[
+        footprints["TileNumber"].str.startswith(strip, na=False)
+        if strip
+        else footprints["TileNumber"].eq("")
+    ].copy()
+
+    if footprints.empty:
+        return {
+            "geojson": {
+                "type": "FeatureCollection",
+                "features": [],
+            },
+            "summary": {"moderate": [], "heavy": []},
+            "passInfo": pass_info,
+        }
 
     request = build_ecmwf_request(
         init_time,
@@ -36,12 +55,6 @@ def compute_ecmwf_footprints(
     coords = sampler["coords"]
     rainfall = sampler["rainfall"]
     tree = sampler["tree"]
-
-    footprints = gpd.read_file(FOOTPRINT_FILE)
-    footprints = footprints.set_crs(
-        "EPSG:4326",
-        allow_override=True,
-    )
 
     summary = {
         "moderate": [],
@@ -102,4 +115,5 @@ def compute_ecmwf_footprints(
     return {
         "geojson": footprints.__geo_interface__,
         "summary": summary,
+        "passInfo": pass_info,
     }

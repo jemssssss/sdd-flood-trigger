@@ -109,7 +109,7 @@ function MapView({
   /* Rendered footprints (Panahon) */
   useEffect(() => {
 
-  if (!map.current || !footprints) return;
+  if (!map.current || !footprints || footprints.features.length === 0) return;
 
   const renderFootprints = () => {
 
@@ -146,7 +146,7 @@ function MapView({
 /* Rendered footprints (ECMWF) */
   useEffect(() => {
 
-  if (!map.current || !footprints) return;
+  if (!map.current || !footprints || footprints.features.length === 0) return;
 
   const renderFootprints = () => {
 

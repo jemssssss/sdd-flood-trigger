@@ -95,10 +95,14 @@ function FloodSummary({
         Flood Trigger Summary
       </h3>
 
+      <hr/>
+
       <SummarySection
         title="Panahon API"
         summary={panahonSummary}
       />
+
+      <hr/>
 
       <SummarySection
         title="ECMWF Open Data"

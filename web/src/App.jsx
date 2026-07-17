@@ -16,6 +16,7 @@ function App() {
   const [footprints, setFootprints] = useState(null);
   const [panahonSummary, setPanahonSummary] = useState({ moderate: [], heavy: [], });
   const [ecmwfSummary, setEcmwfSummary] = useState({ moderate: [], heavy: [], });
+  const [passInfo, setPassInfo] = useState(null);
 
   const [showSynoptic, setShowSynoptic] = useState(true);
   const [showAWS, setShowAWS] = useState(true);
@@ -121,6 +122,7 @@ function App() {
 
       setPanahonSummary(panahonData.summary);
       setEcmwfSummary(ecmwfData.summary);
+      setPassInfo(panahonData.passInfo);
 
     }
 
@@ -191,6 +193,24 @@ function App() {
               ecmwfSummary={ecmwfSummary}
               
             />
+
+            {passInfo && (
+              <div className="satellite-pass-status">
+                {passInfo.hasPass ? (
+                  <>
+                    <strong>{passInfo.satellite} pass: Strip {passInfo.strip}</strong>
+                    <span>Only Strip {passInfo.strip} footprint tiles are shown.</span>
+                  </>
+                ) : (
+                  <>
+                    <strong>No Satellite Pass</strong>
+                    <span>
+                      {passInfo.satellite} has no Philippines pass on {passInfo.passDate}.
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
 
             <MapView
 
