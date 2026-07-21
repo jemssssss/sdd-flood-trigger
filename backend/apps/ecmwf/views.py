@@ -1,6 +1,6 @@
 from django.http import JsonResponse
 from services.ecmwf.footprint import (compute_ecmwf_footprints)
-from services.ecmwf.json_utils import to_python
+from scripts.json_utils import to_python
 from services.sentinel.passes import DEFAULT_SATELLITE
 
 def footprints(request):

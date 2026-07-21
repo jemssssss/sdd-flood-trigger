@@ -21,6 +21,7 @@ urlpatterns = [
     path("admin/", admin.site.urls), 
     path("", include("apps.core.urls")), 
     path("ecmwf/", include("apps.ecmwf.urls")),
+    path("gpm/", include("apps.gpm.urls")),
     path("panahon/", include("apps.panahon.urls")),
     path("sentinel/", include("apps.panahon.urls")),
 ]
