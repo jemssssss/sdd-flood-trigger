@@ -276,7 +276,6 @@ web/
     │   │   ├── panahonTileLayer.jsx
     │   │   └── stationLayer.jsx
     │   │
-    │   ├── EcmwfPointTest.jsx
     │   ├── LayerControl.jsx
     │   ├── FloodSummary.jsx
     │   ├── FootprintPopup.jsx
@@ -284,9 +283,6 @@ web/
     │   ├── RainLegend.jsx
     │   ├── StationLayer.jsx
     │   └── StationPopup.jsx
-    │
-    ├── services/
-    │   └── ecmwfApi.jsx
     │
     ├── utils/
     │   ├── generateFootprintPoints.mjs
@@ -340,8 +336,6 @@ The React app requests the following Django endpoints:
 | `GET /panahon/aws` | Normalized AWS station observations |
 | `GET /panahon/footprints?t=<forecast>&init=<initialization>` | Pass-filtered Sentinel footprint rainfall from Panahon |
 | `GET /ecmwf/footprints?t=<forecast>&init=<initialization>` | Pass-filtered Sentinel footprint rainfall from ECMWF Open Data |
-
-The legacy `/sentinel/footprints` route is currently an alias for the Panahon footprint route. New frontend code uses `/panahon/footprints`.
 
 ---
 
