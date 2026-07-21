@@ -444,11 +444,13 @@ Forecast timestamps are generated automatically using `timeUtils.js`. The foreca
 
 ---
 
-## ECMWF Open Data Integration
+# ECMWF Open Data Integration
 
 The dashboard also supports rainfall visualization from ECMWF Open Data.
 
 Rainfall is downloaded on demand using Earthkit-data and processed on the backend before being sent to the frontend.
+
+## Footprint Raster Sampling
 
 Unlike the Panahon API, ECMWF rainfall is computed directly from the model raster.
 
@@ -514,7 +516,7 @@ Visualized using:
 
 ---
 
-# Raw API Response
+# Raw Panahon API Response
 
 Example Synoptic rainfall station response:
 

@@ -2,7 +2,6 @@ import earthaccess
 from dotenv import load_dotenv
 from pathlib import Path
 from datetime import timedelta
-from pathlib import Path
 from django.conf import settings
 
 DOWNLOAD_DIR = settings.BASE_DIR / "data" / "gpm_cache"
