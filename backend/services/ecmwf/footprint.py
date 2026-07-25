@@ -5,39 +5,63 @@ from shapely.geometry import Point
 from django.conf import settings
 from services.ecmwf.datetime import (build_ecmwf_request)
 from services.ecmwf.sampler import (load_rainfall_dataset)
-from services.sentinel.passes import (DEFAULT_SATELLITE, get_satellite_config, get_sentinel_pass_info)
+from services.sentinel.passes import (get_sentinel_pass_info)
 
 ROOT = settings.BASE_DIR.parent
 
 def compute_ecmwf_footprints(
     forecast_time,
     init_time,
-    satellite=DEFAULT_SATELLITE,
 ):
 
-    satellite_config = get_satellite_config(satellite)
-    pass_info = get_sentinel_pass_info(satellite, forecast_time)
-    strip = pass_info["strip"]
-    footprint_file = ROOT / "web" / "public" / "data" / satellite_config["footprintFile"]
+    pass_info = get_sentinel_pass_info(forecast_time)
+
+    if not pass_info["hasPass"]:
+            return {
+                "geojson": {
+                    "type": "FeatureCollection",
+                    "features": [],
+                },
+                "summary": {
+                    "moderate": [],
+                    "heavy": [],
+                },
+                "passInfo": pass_info,
+            }
+
+    footprint_file = (
+            ROOT
+            / "web"
+            / "public"
+            / "data"
+            / pass_info["footprintFile"]
+        )
 
     footprints = gpd.read_file(footprint_file)
+    
     footprints = footprints.set_crs(
         "EPSG:4326",
         allow_override=True,
     )
+
+    strips = pass_info["strips"]
     footprints = footprints[
-        footprints["TileNumber"].str.startswith(strip, na=False)
-        if strip
-        else footprints["TileNumber"].eq("")
+        footprints["TileNumber"]
+        .str[0]
+        .isin(strips)
     ].copy()
 
     if footprints.empty:
+
         return {
             "geojson": {
                 "type": "FeatureCollection",
                 "features": [],
             },
-            "summary": {"moderate": [], "heavy": []},
+            "summary": {
+                "moderate": [],
+                "heavy": [],
+            },
             "passInfo": pass_info,
         }
 

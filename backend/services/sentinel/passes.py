@@ -2,74 +2,228 @@ from datetime import date, datetime
 from typing import Any, Union
 
 NO_SATELLITE_PASS = "No Satellite Pass"
-DEFAULT_SATELLITE = "Sentinel-1A"
 
-# Future additional satellites can be registered here
+DateInput = Union[date, datetime, str]
+
+# ------------
+# Satellites
+# ------------
+
 SATELLITES: dict[str, dict[str, Any]] = {
     "Sentinel-1A": {
         "aliases": {"S1A", "SENTINEL-1A"},
         "footprintFile": "s1a_footprints.geojson",
+        "footprintFilePoints": "footprintSamplePoints.json",
         "repeatDays": 12,
+        "priority": 1,
         "stripReferences": {
-            "A": date(2026, 1, 31),
-            "B": date(2026, 1, 26),
-            "C": date(2026, 1, 21),
-            "D": date(2026, 1, 28),
-            "E": date(2026, 1, 23),
+            "A": datetime(2026, 1, 31, 0, 0),
+            "B": datetime(2026, 1, 26, 0, 0),
+            "C": datetime(2026, 1, 21, 0, 0),
+            "D": datetime(2026, 1, 28, 0, 0),
+            "E": datetime(2026, 1, 23, 0, 0),
+        },
+    },
+
+    "Sentinel-1C": {
+        "aliases": {"S1C", "SENTINEL-1C"},
+        "footprintFile": "s1c_footprints.geojson",
+        "footprintFilePoints": "footprintSamplePoints_C.json",
+        "repeatDays": 12,
+        "priority": 2,
+        "stripReferences": {
+            "A": datetime(2026, 1, 1, 6),
+            "B": datetime(2026, 1, 8, 6),
+            "C": datetime(2026, 1, 3, 6),
+            "D": datetime(2026, 1, 10, 6),
+            "E": datetime(2026, 1, 5, 6),
+
+            "X": datetime(2026, 1, 3, 18),
+            "Y": datetime(2026, 1, 10, 18),
+            "Z": datetime(2026, 1, 5, 18),
         },
     },
 }
 
-DateInput = Union[date, datetime, str]
+DEFAULT_SATELLITE = "Sentinel-1A" # long live da og
 
-def get_satellite_config(satellite: str) -> dict[str, Any]:
-    satellite_key = satellite.strip().upper().replace("_", "-")
+def _to_datetime(value: DateInput) -> datetime:
 
-    for name, config in SATELLITES.items():
-        if satellite_key in config["aliases"]:
-            return {"name": name, **config}
+    if isinstance(value, datetime):
+        return value
 
-    available = ", ".join(SATELLITES)
-    raise ValueError(
-        f"Unsupported satellite: {satellite}. Available satellites: {available}."
+    if isinstance(value, date):
+        return datetime.combine(
+            value,
+            datetime.min.time(),
+        )
+
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(
+                value.replace("Z", "+00:00")
+            )
+        except ValueError as exc:
+            raise ValueError(
+                "Invalid ISO datetime."
+            ) from exc
+
+    raise TypeError(
+        "Expected date, datetime or ISO string."
     )
 
 
-def get_sentinel_pass_info(satellite: str, pass_date: DateInput) -> dict[str, Any]:
-    config = get_satellite_config(satellite)
-    target_date = _to_date(pass_date)
-    strip = get_sentinel_pass(config["name"], target_date)
+def get_satellite_config(
+    satellite: str,
+):
+
+    key = satellite.upper().replace("_", "-")
+
+    for name, config in SATELLITES.items():
+
+        if (
+            key == name.upper()
+            or key in config["aliases"]
+        ):
+            return {
+                "name": name,
+                **config,
+            }
+
+    raise ValueError(
+        f"Unsupported satellite: {satellite}"
+    )
+
+
+# ---------------
+# Compute strips
+# ---------------
+
+def get_sentinel_passes(
+    satellite: str,
+    pass_time: DateInput,
+):
+
+    config = get_satellite_config(
+        satellite,
+    )
+
+    target = _to_datetime(
+        pass_time,
+    )
+
+    # Determine which orbit (hour) is active.
+    pass_hours = sorted(
+        {
+            ref.hour
+            for ref in config["stripReferences"].values()
+        }
+    )
+
+    active_hour = None
+
+    for hour in pass_hours:
+        if target.hour >= hour:
+            active_hour = hour
+
+    if active_hour is None:
+        return []
+
+    strips = []
+
+    for strip, reference in config["stripReferences"].items():
+        # Ignore strips belonging to a different orbit.
+        if reference.hour != active_hour:
+            continue
+
+        if target < reference:
+            continue
+
+        elapsed = target - reference
+
+        if elapsed.days % config["repeatDays"] != 0:
+            continue
+
+        strips.append(strip)
+
+    strips.sort()
+
+    return strips
+
+def get_active_satellite(
+    pass_time: DateInput,
+):
+
+    target = _to_datetime(
+        pass_time,
+    )
+
+    candidates = []
+
+    for satellite in SATELLITES:
+
+        strips = get_sentinel_passes(
+            satellite,
+            target,
+        )
+
+        if not strips:
+            continue
+
+        config = get_satellite_config(
+            satellite,
+        )
+
+        candidates.append({
+            "satellite": satellite,
+            "priority": config["priority"],
+            "footprintFile": config["footprintFile"],
+            "footprintFilePoints": config["footprintFilePoints"],
+            "strips": strips,
+        })
+
+    if not candidates:
+        return None
+
+    candidates.sort(
+        key=lambda x: x["priority"],
+        reverse=True,
+    )
+
+    return candidates[0]
+
+def get_sentinel_pass_info(
+    pass_time: DateInput,
+):
+
+    target = _to_datetime(
+        pass_time,
+    )
+
+    active = get_active_satellite(
+        target,
+    )
+
+    if active is None:
+
+        return {
+
+            "hasPass": False,
+            "satellite": None,
+            "footprintFile": None,
+            "footprintFilePoints": None,
+            "strips": [],
+            "passDate": target.isoformat(),
+
+        }
 
     return {
-        "satellite": config["name"],
-        "passDate": target_date.isoformat(),
-        "hasPass": strip != NO_SATELLITE_PASS,
-        "strip": None if strip == NO_SATELLITE_PASS else strip,
+
+        "hasPass": True,
+        "satellite": active["satellite"],
+        "footprintFile": active["footprintFile"],
+        "footprintFilePoints": active["footprintFilePoints"],
+        "strips": active["strips"],
+        "passDate": target.isoformat(),
+
     }
-
-
-def get_sentinel_pass(satellite: str, pass_date: DateInput) -> str:
-    # Return the Philippines strip for a satellite pass, or no-pass text.
-    config = get_satellite_config(satellite)
-    target_date = _to_date(pass_date)
-
-    for strip, reference_date in config["stripReferences"].items():
-        elapsed_days = (target_date - reference_date).days
-        if elapsed_days % config["repeatDays"] == 0:
-            return strip
-
-    return NO_SATELLITE_PASS
-
-
-def _to_date(value: DateInput) -> date:
-    # Normalize supported input forms without applying a timezone conversion.
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    if isinstance(value, str):
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
-        except ValueError as exc:
-            raise ValueError("pass_date must be an ISO-8601 date or datetime.") from exc
-    raise TypeError("pass_date must be a date, datetime, or ISO-8601 string.")

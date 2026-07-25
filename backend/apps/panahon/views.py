@@ -3,7 +3,6 @@ from services.panahon.client import ( fetch_synoptic, fetch_aws )
 from services.panahon.parser import ( parse_stations )
 from services.panahon.point import ( fetch_point_rainfall )
 from services.panahon.footprint import ( compute_footprints )
-from services.sentinel.passes import DEFAULT_SATELLITE
 
 def synoptic(request):
 
@@ -65,7 +64,6 @@ def footprints(request):
 
     forecast_time = request.GET.get("t")
     init_time = request.GET.get("init")
-    satellite = request.GET.get("satellite", DEFAULT_SATELLITE)
 
     if not forecast_time or not init_time:
 
@@ -80,7 +78,6 @@ def footprints(request):
         result = compute_footprints(
             forecast_time,
             init_time,
-            satellite,
         )
     except ValueError as error:
         return JsonResponse({"error": str(error)}, status=400)

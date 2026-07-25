@@ -4,20 +4,10 @@ from pathlib import Path
 import httpx
 import statistics
 from django.conf import settings
-from services.sentinel.passes import (DEFAULT_SATELLITE, get_satellite_config, get_sentinel_pass_info)
+from services.sentinel.passes import (get_sentinel_pass_info)
 
 ROOT = settings.BASE_DIR.parent
-
-SAMPLE_FILE = (
-    ROOT
-    / "web"
-    / "public"
-    / "data"
-    / "footprintSamplePoints.json"
-)
-
 TOKEN = settings.PANAHON_API_TOKEN
-
 POINT_URL = "https://www.panahon.gov.ph/api/v1/tiles/point"
 
 # Maximum simultaneous requests
@@ -70,16 +60,43 @@ async def fetch_point(
 
 async def compute_worker(
     forecast_time,
-    init_time,
-    satellite,
+    init_time
 ):
 
     # -----------------------
     # Read files
     # -----------------------
 
-    satellite_config = get_satellite_config(satellite)
-    footprint_file = ROOT / "web" / "public" / "data" / satellite_config["footprintFile"]
+    pass_info = get_sentinel_pass_info(forecast_time)
+
+    if not pass_info["hasPass"]:
+        return {
+            "geojson": {
+                "type": "FeatureCollection",
+                "features": [],
+            },
+            "summary": {
+                "moderate": [],
+                "heavy": [],
+            },
+            "passInfo": pass_info,
+        }
+
+    footprint_file = (
+        ROOT
+        / "web"
+        / "public"
+        / "data"
+        / pass_info["footprintFile"]
+    )
+
+    SAMPLE_FILE = (
+            ROOT
+            / "web"
+            / "public"
+            / "data"
+            / pass_info["footprintFilePoints"]
+        )
 
     with open(
         footprint_file,
@@ -88,15 +105,18 @@ async def compute_worker(
 
         geojson = json.load(f)
 
-    pass_info = get_sentinel_pass_info(satellite, forecast_time)
-    strip = pass_info["strip"]
+    strips = set(pass_info["strips"])
     geojson["features"] = [
         feature
         for feature in geojson["features"]
-        if strip and feature["properties"].get("TileNumber", "").startswith(strip)
+        if (
+            feature["properties"]
+            .get("TileNumber", "")[:1]
+            in strips
+        )
     ]
 
-    if not strip:
+    if not strips:
         return {
             "geojson": geojson,
             "summary": {"moderate": [], "heavy": []},
@@ -132,13 +152,9 @@ async def compute_worker(
 
             unique_points[key] = point
 
-    print(
-        f"Unique sampling points: {len(unique_points)}"
-    )
+    print(f"Unique sampling points: {len(unique_points)}")
 
-    semaphore = asyncio.Semaphore(
-        MAX_CONCURRENT_REQUESTS
-    )
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
 
     limits = httpx.Limits(
         max_connections=MAX_CONCURRENT_REQUESTS,
@@ -237,13 +253,11 @@ async def compute_worker(
 def compute_footprints(
     forecast_time,
     init_time,
-    satellite=DEFAULT_SATELLITE,
 ):
 
     return asyncio.run(
         compute_worker(
             forecast_time,
             init_time,
-            satellite,
         )
     )
