@@ -212,6 +212,10 @@ def get_sentinel_pass_info(
 
     }
 
+# -----------------------------------------
+# Forecast and Initialization Timestamps
+# -----------------------------------------
+
 def get_active_accumulation_window(now=None):
 
     if now is None:
@@ -246,7 +250,7 @@ def get_active_accumulation_window(now=None):
     else:
         forecast = morning
 
-        # before 6AM → yesterday 6AM
+        # before 6AM -> yesterday 6AM
         if now < morning:
             forecast -= timedelta(days=1)
 

@@ -1,3 +1,5 @@
+const ACCUMULATION_HOUR = 6;
+
 export function getLatestTimeDate() {
   const now = new Date();
 

@@ -31,93 +31,90 @@ function App() {
 
     async function fetchStations() {
 
-    setLoading(true);
-    setError(null);
+      setLoading(true);
+      setError(null);
 
-    try {
+      try {
 
-      /* Fetching Rainfall Data */
+        /* Fetching Rainfall Data */
 
-      const [
-        synopticResponse,
-        awsResponse,
-      ] = await Promise.all([
-        fetch(`${BACKEND_URL}/panahon/synoptic`),
-        fetch(`${BACKEND_URL}/panahon/aws`),
-      ]);
+        const [
+          synopticResponse,
+          awsResponse,
+        ] = await Promise.all([
+          fetch(`${BACKEND_URL}/panahon/synoptic`),
+          fetch(`${BACKEND_URL}/panahon/aws`),
+        ]);
 
-      const backend = import.meta.env.VITE_BACKEND_BASE_URL;
-      const [panahonResponse, ecmwfResponse] =
-      await Promise.all([
-        fetch(`${backend}/panahon/footprints`),
-        fetch(`${backend}/ecmwf/footprints`)
-      ]);
+        const [panahonResponse, ecmwfResponse] =
+        await Promise.all([
+          fetch(`${BACKEND_URL}/panahon/footprints`),
+          fetch(`${BACKEND_URL}/ecmwf/footprints`)
+        ]);
 
-      if (!synopticResponse.ok || !awsResponse.ok) {
-        throw new Error("Backend request for rainfall stations failed.");
+        if (!synopticResponse.ok || !awsResponse.ok) {
+          throw new Error("Backend request for rainfall stations failed.");
+        }
+
+        if (!panahonResponse.ok) {
+          throw new Error("Failed to compute footprints (Panahon data).");
+        }
+
+        if (!ecmwfResponse.ok) {
+          throw new Error("Failed to compute footprints (ECMWF data).");
+        }
+
+        const synopticStations = await synopticResponse.json();
+        const awsStations = await awsResponse.json();
+        const panahonData = await panahonResponse.json();
+        const ecmwfData = await ecmwfResponse.json();
+
+        console.table(synopticStations);
+        console.table(awsStations);
+        console.log("Panahon API Data");
+        console.table(
+          panahonData.geojson.features.map(feature => ({
+            tile: feature.properties.TileNumber,
+            rainfall: feature.properties.averageRainfall
+          }))
+        );
+        console.log("ECMWF API Data");
+        console.table(
+          ecmwfData.geojson.features.map(feature => ({
+            tile: feature.properties.TileNumber,
+            rainfall: feature.properties.ecmwfRainfall
+          }))
+        );
+
+        setSynopticStations(synopticStations);
+        setAwsStations(awsStations);
+        
+        const merged = structuredClone(panahonData.geojson);
+        merged.features.forEach((feature) => {
+          const tile = feature.properties.TileNumber;
+          const ecmwfFeature =
+            ecmwfData.geojson.features.find(f => f.properties.TileNumber === tile);
+
+          feature.properties.ecmwfRainfall = ecmwfFeature?.properties.ecmwfRainfall ?? null;
+        });
+        setFootprints(merged);
+
+        setPanahonSummary(panahonData.summary);
+        setEcmwfSummary(ecmwfData.summary);
+        setPassInfo(panahonData.passInfo);
+
       }
 
-      if (!panahonResponse.ok) {
-        throw new Error("Failed to compute footprints (Panahon data).");
+      catch (err) {
+        console.error(err);
+        setError(err.message);
       }
 
-      if (!ecmwfResponse.ok) {
-        throw new Error("Failed to compute footprints (ECMWF data).");
+      finally {
+        setLoading(false);
       }
 
-      const synopticStations = await synopticResponse.json();
-      const awsStations = await awsResponse.json();
-      const panahonData = await panahonResponse.json();
-      const ecmwfData = await ecmwfResponse.json();
-
-      console.table(synopticStations);
-      console.table(awsStations);
-      console.log("Panahon API Data");
-      console.table(
-        panahonData.geojson.features.map(feature => ({
-          tile: feature.properties.TileNumber,
-          rainfall: feature.properties.averageRainfall
-        }))
-      );
-      console.log("ECMWF API Data");
-      console.table(
-        ecmwfData.geojson.features.map(feature => ({
-          tile: feature.properties.TileNumber,
-          rainfall: feature.properties.ecmwfRainfall
-        }))
-      );
-
-      setSynopticStations(synopticStations);
-      setAwsStations(awsStations);
-      
-      const merged = structuredClone(panahonData.geojson);
-      merged.features.forEach((feature) => {
-        const tile = feature.properties.TileNumber;
-        const ecmwfFeature =
-          ecmwfData.geojson.features.find(f => f.properties.TileNumber === tile);
-
-        feature.properties.ecmwfRainfall = ecmwfFeature?.properties.ecmwfRainfall ?? null;
-      });
-      setFootprints(merged);
-
-      setPanahonSummary(panahonData.summary);
-      setEcmwfSummary(ecmwfData.summary);
-      setPassInfo(panahonData.passInfo);
-
-    }
-
-    catch (err) {
-      console.error(err);
-      setError(err.message);
-    }
-
-    finally {
-      setLoading(false);
-    }
-
-  }
-
-    fetchStations();
+    } fetchStations();
   }, []);
 
   return (

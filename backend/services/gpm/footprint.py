@@ -130,10 +130,7 @@ def compute_gpm_footprints(
                 ~np.isnan(values)
             ]
 
-        #
         # Fallback to nearest grid point
-        #
-
         if len(values) == 0:
 
             centroid = polygon.centroid
@@ -144,11 +141,7 @@ def compute_gpm_footprints(
             )
 
             nearest_values = rain_values.ravel()[nearest]
-
-            nearest_values = nearest_values[
-                ~np.isnan(nearest_values)
-            ]
-
+            nearest_values = nearest_values[~np.isnan(nearest_values)]
             values = nearest_values
 
         average = float(np.mean(values))
