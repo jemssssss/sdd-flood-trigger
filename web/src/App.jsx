@@ -4,7 +4,6 @@ import LayerControl from "./components/LayerControl";
 import RainLegend from "./components/RainLegend";
 import FloodSummary from "./components/FloodSummary";
 import { useEffect, useState } from "react";
-import { getAccumulationTimes } from "./utils/timeUtils";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_BASE_URL;
 
@@ -25,11 +24,6 @@ function App() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  const { forecastTime, initTime, hour } = getAccumulationTimes();
-  console.log("Accumulation hour:", hour);
-  console.log("Forecast time:", forecastTime);
-  console.log("Init time:", initTime);
 
   useEffect(() => {
 
@@ -55,22 +49,11 @@ function App() {
       const backend = import.meta.env.VITE_BACKEND_BASE_URL;
       const [panahonResponse, ecmwfResponse] =
       await Promise.all([
-        fetch(
-          `${backend}/panahon/footprints` +
-          `?t=${encodeURIComponent(forecastTime)}` +
-          `&init=${encodeURIComponent(initTime)}`
-        ),
-        fetch(
-          `${backend}/ecmwf/footprints` +
-          `?t=${encodeURIComponent(forecastTime)}` +
-          `&init=${encodeURIComponent(initTime)}`
-        )
+        fetch(`${backend}/panahon/footprints`),
+        fetch(`${backend}/ecmwf/footprints`)
       ]);
 
-      if (
-        !synopticResponse.ok ||
-        !awsResponse.ok 
-      ) {
+      if (!synopticResponse.ok || !awsResponse.ok) {
         throw new Error("Backend request for rainfall stations failed.");
       }
 
@@ -111,12 +94,9 @@ function App() {
       merged.features.forEach((feature) => {
         const tile = feature.properties.TileNumber;
         const ecmwfFeature =
-          ecmwfData.geojson.features.find(
-            f => f.properties.TileNumber === tile
-          );
+          ecmwfData.geojson.features.find(f => f.properties.TileNumber === tile);
 
-        feature.properties.ecmwfRainfall =
-          ecmwfFeature?.properties.ecmwfRainfall ?? null;
+        feature.properties.ecmwfRainfall = ecmwfFeature?.properties.ecmwfRainfall ?? null;
       });
       setFootprints(merged);
 

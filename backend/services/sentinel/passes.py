@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Union
 
 NO_SATELLITE_PASS = "No Satellite Pass"
@@ -209,5 +209,55 @@ def get_sentinel_pass_info(
         "footprintFilePoints": active["footprintFilePoints"],
         "strips": active["strips"],
         "passDate": target.isoformat(),
+
+    }
+
+def get_active_accumulation_window(now=None):
+
+    if now is None:
+        now = datetime.now()
+
+    today = now.replace(
+        minute=0,
+        second=0,
+        microsecond=0,
+    )    
+
+    morning = today.replace(hour=6)
+    evening = today.replace(hour=18)
+
+    # Does today have a 6 PM pass?
+    evening_pass = False
+    for satellite in SATELLITES:
+        strips = get_sentinel_passes(
+            satellite,
+            evening,
+        )
+
+        if any(
+            strip in ("X", "Y", "Z") # X/Y/Z are evening strips
+            for strip in strips
+        ):
+            evening_pass = True
+            break
+
+    if evening_pass and now >= evening:
+        forecast = evening
+    else:
+        forecast = morning
+
+        # before 6AM → yesterday 6AM
+        if now < morning:
+            forecast -= timedelta(days=1)
+
+    init = forecast - timedelta(days=1)
+    
+    print("Forecast Datetime:", forecast)
+    print("Initial Datetime:", init)
+    return {
+
+        "forecast": forecast,
+        "init": init,
+        "hour": forecast.hour,
 
     }
