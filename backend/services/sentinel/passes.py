@@ -104,13 +104,8 @@ def get_sentinel_passes(
     pass_time: DateInput,
 ):
 
-    config = get_satellite_config(
-        satellite,
-    )
-
-    target = _to_datetime(
-        pass_time,
-    )
+    config = get_satellite_config(satellite)
+    target = _to_datetime(pass_time)
 
     # Determine which orbit (hour) is active.
     pass_hours = sorted(
@@ -162,18 +157,12 @@ def get_active_satellite(
 
     for satellite in SATELLITES:
 
-        strips = get_sentinel_passes(
-            satellite,
-            target,
-        )
+        strips = get_sentinel_passes(satellite, target)
 
         if not strips:
             continue
 
-        config = get_satellite_config(
-            satellite,
-        )
-
+        config = get_satellite_config(satellite)
         candidates.append({
             "satellite": satellite,
             "priority": config["priority"],
@@ -196,13 +185,8 @@ def get_sentinel_pass_info(
     pass_time: DateInput,
 ):
 
-    target = _to_datetime(
-        pass_time,
-    )
-
-    active = get_active_satellite(
-        target,
-    )
+    target = _to_datetime(pass_time)
+    active = get_active_satellite(target)
 
     if active is None:
 

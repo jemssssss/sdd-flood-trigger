@@ -73,6 +73,15 @@
 }
 
 /* =========================
+   Footprint Pop-up
+========================= */
+
+.footprint-popup p, h4 {
+    margin-top: -1px;
+    margin-bottom: -1px;
+}
+
+/* =========================
    Rain Legend
 ========================= */
 

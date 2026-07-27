@@ -1,11 +1,7 @@
 import numpy as np
 import xarray as xr
 from scipy.spatial import cKDTree
-
-from services.gpm.dataset import (
-    login,
-    download_imerg,
-)
+from services.gpm.dataset import (login, download_imerg)
 
 
 def load_rainfall_dataset(end_time):

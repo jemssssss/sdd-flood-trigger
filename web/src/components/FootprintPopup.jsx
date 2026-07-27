@@ -1,4 +1,5 @@
-import { getLatestTimeDate, formatSensingTime } from "../utils/timeUtils";
+import { getLatestTimeDate, formatSensingTime, formatSensingTimeECMWF } from "../utils/timeUtils";
+import "../styles/App.css";
 
 function classify(mm) {
   if (mm > 180) return "Heavy";
@@ -17,9 +18,9 @@ function FootprintPopup({ footprint }) {
 
   return (
 
-    <div className="popup">
+    <div className="footprint-popup">
 
-      <h3>Sentinel-1A Footprint</h3>
+      <h3>{footprint.satellite} Footprint</h3>
 
       <p>
         <strong>Tile</strong><br/>
@@ -32,8 +33,13 @@ function FootprintPopup({ footprint }) {
       </p>
 
       <p>
-        <strong>Sensing Time</strong><br/>
+        <strong>Panahon Sensing Time</strong><br/>
         {formatSensingTime()}
+      </p>
+
+      <p>
+        <strong>ECMWF Sensing Time</strong><br/>
+        {formatSensingTimeECMWF()}
       </p>
 
       <p>

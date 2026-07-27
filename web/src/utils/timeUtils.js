@@ -13,9 +13,9 @@ export function getAccumulationTimes() {
   // use yesterday instead.
   const now = new Date();
 
-  //if (now < end) {
-  //  end.setDate(end.getDate() - 1);
-  //}
+  if (now < end) {
+    end.setDate(end.getDate() - 1);
+  }
 
   const start = new Date(end);
   start.setDate(start.getDate() - 1);
@@ -63,6 +63,18 @@ export function getLatestTimeDate() {
 
 export function formatSensingTime() {
   const sensingTime = ACCUMULATION_HOUR;
+  const sensingTimeR = ACCUMULATION_HOUR - 12;
+
+  if (sensingTime < 12) {
+    return `${sensingTime} AM`;
+  }
+  else {
+    return `${sensingTimeR} PM`;
+  }
+}
+
+export function formatSensingTimeECMWF() {
+  const sensingTime = ACCUMULATION_HOUR - 4; // Shifted by 4 hours to accommodate earthkit-data requirements
   const sensingTimeR = ACCUMULATION_HOUR - 12;
 
   if (sensingTime < 12) {
