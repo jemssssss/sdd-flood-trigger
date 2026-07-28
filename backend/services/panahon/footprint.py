@@ -130,9 +130,15 @@ async def compute_worker(
 
         sample_points = json.load(f)
 
+    active_tiles = {
+        feature["properties"]["TileNumber"]
+        for feature in geojson["features"]
+    }
+
     sample_lookup = {
         item["tile"]: item["samplePoints"]
         for item in sample_points
+        if item["tile"] in active_tiles
     }
 
     # -----------------------
@@ -226,8 +232,9 @@ async def compute_worker(
             # sum(rainfall)
             # / len(rainfall)
             # or
-            # statistics.mean(rainfall)
-            max(rainfall)
+            statistics.mean(rainfall)
+            # or
+            # max(rainfall)
         )
 
         feature["properties"]["averageRainfall"] = average

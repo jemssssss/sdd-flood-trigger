@@ -1,10 +1,10 @@
 import fs from "fs";
 import * as turf from "@turf/turf";
 
-const SAMPLE_POINTS = Number(process.env.VITE_SAMPLING_POINTS ?? 15);
+const SAMPLE_POINTS = Number(process.env.VITE_SAMPLING_POINTS ?? 25);
 
 const geojson = JSON.parse(
-  fs.readFileSync("./public/data/s1a_footprints.geojson", "utf8")
+  fs.readFileSync("./public/data/s1c_footprints.geojson", "utf8")
 );
 
 const output = [];
@@ -38,7 +38,7 @@ for (const feature of geojson.features) {
 }
 
 fs.writeFileSync(
-  "./public/data/footprintSamplePoints.json",
+  "./public/data/footprintSamplePoints_C.json",
   JSON.stringify(output, null, 2)
 );
 

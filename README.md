@@ -240,7 +240,7 @@ backend/
 │   ├── urls.py
 │   └── wsgi.py
 │
-├── config/
+├── data/
 │   └── gpm_cache/
 │
 ├── scripts/
@@ -343,8 +343,9 @@ The React app requests the following Django endpoints:
 | `GET /health/` | Backend health check |
 | `GET /panahon/synoptic` | Normalized Synoptic station observations |
 | `GET /panahon/aws` | Normalized AWS station observations |
-| `GET /panahon/footprints` | Pass-filtered Sentinel footprint rainfall from Panahon |
-| `GET /ecmwf/footprints` | Pass-filtered Sentinel footprint rainfall from ECMWF Open Data |
+| `GET /panahon/footprints` | Pass-filtered Sentinel-1 satellite footprint rainfall from Panahon |
+| `GET /ecmwf/footprints` | Pass-filtered Sentinel-1 satellite footprint rainfall from ECMWF Open Data |
+| `GET /gpm/footprints` | Pass-filtered Sentinel-1 satellite footprint rainfall from NASA GPM IMERG |
 
 ---
 
@@ -618,7 +619,7 @@ For every footprint:
 2. Request rainfall from the Panahon API.
 3. Execute requests concurrently.
 4. Cache repeated point requests.
-5. Select the maximum sampled rainfall value for the footprint (stored in the existing `averageRainfall` property for compatibility).
+5. Compute the average rainfall value for the footprint (stored in the existing `averageRainfall` property for compatibility).
 6. Store as:
 
 ```javascript

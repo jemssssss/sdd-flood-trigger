@@ -149,12 +149,9 @@ def get_active_satellite(
     pass_time: DateInput,
 ):
 
-    target = _to_datetime(
-        pass_time,
-    )
+    target = _to_datetime(pass_time)
 
     candidates = []
-
     for satellite in SATELLITES:
 
         strips = get_sentinel_passes(satellite, target)

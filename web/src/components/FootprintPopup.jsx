@@ -34,12 +34,12 @@ function FootprintPopup({ footprint }) {
 
       <p>
         <strong>Panahon Sensing Time</strong><br/>
-        {formatSensingTime()}
+        {footprint.pass_hour}
       </p>
 
       <p>
         <strong>ECMWF Sensing Time</strong><br/>
-        {formatSensingTimeECMWF()}
+        {footprint.pass_hour.replace("6", "2")}
       </p>
 
       <p>

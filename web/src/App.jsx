@@ -175,8 +175,8 @@ function App() {
               <div className="satellite-pass-status">
                 {passInfo.hasPass ? (
                   <>
-                    <strong>{passInfo.satellite} pass: Strip {passInfo.strip}</strong>
-                    <span>Only Strip {passInfo.strip} footprint tiles are shown.</span>
+                    <strong>{passInfo.satellite} pass: Strip {passInfo.strips}</strong>
+                    <span>Only Strip {passInfo.strips} footprint tiles are shown.</span>
                   </>
                 ) : (
                   <>

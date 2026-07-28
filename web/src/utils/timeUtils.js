@@ -1,8 +1,12 @@
-const ACCUMULATION_HOUR = 6;
+const now = new Date();
+const ACCUMULATION_HOUR = 12;
+
+const formatHour = (date, withZulu = false) => {
+  const hour = date.getHours();
+  return hour;
+};
 
 export function getLatestTimeDate() {
-  const now = new Date();
-
   // Round down to the nearest hour
   now.setMinutes(0);
   now.setSeconds(0);
