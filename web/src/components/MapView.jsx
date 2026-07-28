@@ -5,6 +5,7 @@ import FootprintPopup from "./FootprintPopup";
 import { updateStationLayer } from "./map/stationLayer";
 import { updatePanahonLayer } from "./map/panahonTileLayer";
 import { updateECMWFLayer } from "./map/ecmwfTileLayer";
+import { updateGPMLayer } from "./map/gpmTileLayer";
 import maplibregl from "maplibre-gl";
 import bbox from "@turf/bbox";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -16,7 +17,8 @@ function MapView({
   showAWS, 
   footprints, 
   showPanahonFootprints, 
-  showEcmwfFootprints 
+  showEcmwfFootprints,
+  showGpmFootprints 
 }) {
   /* Map general settings */
   const mapContainer = useRef(null);
@@ -179,6 +181,43 @@ function MapView({
   }
 
 }, [footprints, showEcmwfFootprints]);
+
+/* Rendered footprints (NASA GPM) */
+  useEffect(() => {
+
+  if (!map.current || !footprints || footprints.features.length === 0) return;
+
+  const renderFootprints = () => {
+
+    updateGPMLayer({
+      map: map.current,
+      sourceId: "gpm-footprints",
+      fillLayerId: "gpm-fill",
+      outlineLayerId: "gpm-outline",
+      footprints: footprints,
+      visible: showGpmFootprints,
+      hasFitBounds,
+      stationPopup,
+      footprintPopup,
+    });
+
+    if (map.current.getLayer("synoptic-layer")) {
+      map.current.moveLayer("synoptic-layer");
+    }
+
+    if (map.current.getLayer("aws-layer")) {
+      map.current.moveLayer("aws-layer");
+    }
+
+  };
+
+  if (map.current.isStyleLoaded()) {
+    renderFootprints();
+  } else {
+    map.current.once("load", renderFootprints);
+  }
+
+}, [footprints, showGpmFootprints]);
 
 /* Clean up when the component unmounts */
 useEffect(() => {

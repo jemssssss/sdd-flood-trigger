@@ -15,12 +15,14 @@ function App() {
   const [footprints, setFootprints] = useState(null);
   const [panahonSummary, setPanahonSummary] = useState({ moderate: [], heavy: [], });
   const [ecmwfSummary, setEcmwfSummary] = useState({ moderate: [], heavy: [], });
+  const [gpmSummary, setGpmSummary] = useState({ moderate: [], heavy: [], });
   const [passInfo, setPassInfo] = useState(null);
 
   const [showSynoptic, setShowSynoptic] = useState(true);
   const [showAWS, setShowAWS] = useState(true);
   const [showPanahonFootprints, setShowPanahonFootprints] = useState(true);
   const [showEcmwfFootprints, setShowEcmwfFootprints] = useState(false);
+  const [showGpmFootprints, setShowGpmFootprints] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -46,10 +48,11 @@ function App() {
           fetch(`${BACKEND_URL}/panahon/aws`),
         ]);
 
-        const [panahonResponse, ecmwfResponse] =
+        const [panahonResponse, ecmwfResponse, gpmResponse] =
         await Promise.all([
           fetch(`${BACKEND_URL}/panahon/footprints`),
-          fetch(`${BACKEND_URL}/ecmwf/footprints`)
+          fetch(`${BACKEND_URL}/ecmwf/footprints`),
+          fetch(`${BACKEND_URL}/gpm/footprints`)
         ]);
 
         if (!synopticResponse.ok || !awsResponse.ok) {
@@ -64,10 +67,15 @@ function App() {
           throw new Error("Failed to compute footprints (ECMWF data).");
         }
 
+        if (!gpmResponse.ok) {
+          throw new Error("Failed to compute footprints (NASA GPM data).");
+        }
+
         const synopticStations = await synopticResponse.json();
         const awsStations = await awsResponse.json();
         const panahonData = await panahonResponse.json();
         const ecmwfData = await ecmwfResponse.json();
+        const gpmData = await gpmResponse.json();
 
         console.table(synopticStations);
         console.table(awsStations);
@@ -78,11 +86,18 @@ function App() {
             rainfall: feature.properties.averageRainfall
           }))
         );
-        console.log("ECMWF API Data");
+        console.log("earthkit-data API (ECMWF) Data");
         console.table(
           ecmwfData.geojson.features.map(feature => ({
             tile: feature.properties.TileNumber,
             rainfall: feature.properties.ecmwfRainfall
+          }))
+        );
+        console.log("earthaccess API (GPM) Data");
+        console.table(
+          gpmData.geojson.features.map(feature => ({
+            tile: feature.properties.TileNumber,
+            rainfall: feature.properties.gpmRainfall
           }))
         );
 
@@ -92,15 +107,28 @@ function App() {
         const merged = structuredClone(panahonData.geojson);
         merged.features.forEach((feature) => {
           const tile = feature.properties.TileNumber;
-          const ecmwfFeature =
-            ecmwfData.geojson.features.find(f => f.properties.TileNumber === tile);
 
-          feature.properties.ecmwfRainfall = ecmwfFeature?.properties.ecmwfRainfall ?? null;
+          const ecmwfFeature =
+            ecmwfData.geojson.features.find(
+              f => f.properties.TileNumber === tile
+            );
+
+          const gpmFeature =
+            gpmData.geojson.features.find(
+              f => f.properties.TileNumber === tile
+            );
+
+          feature.properties.ecmwfRainfall =
+            ecmwfFeature?.properties.ecmwfRainfall ?? null;
+
+          feature.properties.gpmRainfall =
+            gpmFeature?.properties.gpmRainfall ?? null;
         });
         setFootprints(merged);
 
         setPanahonSummary(panahonData.summary);
         setEcmwfSummary(ecmwfData.summary);
+        setGpmSummary(gpmData.summary);
         setPassInfo(panahonData.passInfo);
 
       }
@@ -162,12 +190,16 @@ function App() {
               showEcmwfFootprints={showEcmwfFootprints}
               setShowEcmwfFootprints={setShowEcmwfFootprints}
 
+              showGpmFootprints={showGpmFootprints}
+              setShowGpmFootprints={setShowGpmFootprints}
+
             />
 
             <FloodSummary
 
               panahonSummary={panahonSummary}
               ecmwfSummary={ecmwfSummary}
+              gpmSummary={gpmSummary}
               
             />
 
@@ -199,6 +231,7 @@ function App() {
               showAWS={showAWS}
               showPanahonFootprints={showPanahonFootprints}
               showEcmwfFootprints={showEcmwfFootprints}
+              showGpmFootprints={showGpmFootprints}
 
             />
 

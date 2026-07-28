@@ -1,4 +1,4 @@
-import { getLatestTimeDate, formatSensingTime, formatSensingTimeECMWF } from "../utils/timeUtils";
+import { getLatestTimeDate } from "../utils/timeUtils";
 import "../styles/App.css";
 
 function classify(mm) {
@@ -11,10 +11,12 @@ function FootprintPopup({ footprint }) {
 
   console.log(footprint.averageRainfall);
   console.log(footprint.ecmwfRainfall);
+  console.log(footprint.gpmRainfall);
 
   const SAMPLE_POINTS = Number(import.meta.env.VITE_SAMPLING_POINTS ?? 7);
   const panahon = Number(footprint.averageRainfall ?? 0);
   const ecmwf = Number(footprint.ecmwfRainfall ?? 0);
+  const gpm = Number(footprint.gpmRainfall ?? 0);
 
   return (
 
@@ -43,6 +45,11 @@ function FootprintPopup({ footprint }) {
       </p>
 
       <p>
+        <strong>NASA GPM Sensing Time</strong><br/>
+        Placeholder
+      </p>
+
+      <p>
         <strong>Sampling Points (Panahon API)</strong><br/>
         {SAMPLE_POINTS}
       </p>
@@ -63,6 +70,11 @@ function FootprintPopup({ footprint }) {
           <tr>
             <td>ECMWF</td>
             <td>{ecmwf.toFixed(2)} mm</td>
+          </tr>
+
+          <tr>
+            <td>NASA GPM</td>
+            <td>{gpm.toFixed(2)} mm</td>
           </tr>
 
         </tbody>

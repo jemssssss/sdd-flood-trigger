@@ -85,6 +85,7 @@ function SummarySection({ title, summary }) {
 function FloodSummary({
   panahonSummary,
   ecmwfSummary,
+  gpmSummary
 }) {
 
   return (
@@ -98,7 +99,7 @@ function FloodSummary({
       <hr/>
 
       <SummarySection
-        title="Panahon API"
+        title="Panahon"
         summary={panahonSummary}
       />
 
@@ -107,6 +108,13 @@ function FloodSummary({
       <SummarySection
         title="ECMWF Open Data"
         summary={ecmwfSummary}
+      />
+
+      <hr/>
+
+      <SummarySection
+        title="NASA GPM"
+        summary={gpmSummary}
       />
 
     </div>

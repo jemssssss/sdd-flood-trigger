@@ -14,6 +14,9 @@ function LayerControl({
 	showEcmwfFootprints,
 	setShowEcmwfFootprints,
 
+	showGpmFootprints,
+	setShowGpmFootprints
+
 }) {
 
 	return (
@@ -75,6 +78,20 @@ function LayerControl({
 					/>
 
 					Footprints (ECMWF)
+
+				</label>
+
+				<label>
+
+					<input
+						type="checkbox"
+						checked={showGpmFootprints}
+						onChange={(e)=>
+							setShowGpmFootprints(e.target.checked)
+						}
+					/>
+
+					Footprints (NASA GPM)
 
 				</label>
 
