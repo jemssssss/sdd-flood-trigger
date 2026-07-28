@@ -1,25 +1,71 @@
 import numpy as np
 import xarray as xr
 from scipy.spatial import cKDTree
-from services.gpm.dataset import (login, download_imerg)
+from services.gpm.dataset import (download_imerg_24h)
+from services.gpm.datetime import (build_gpm_request, validate_request_time)
 
-
-def load_rainfall_dataset(end_time):
+def build_24h_accumulation(
+    files,
+):
     """
-    Downloads (or reuses) the latest IMERG Daily file,
-    opens it with xarray,
-    and prepares everything needed for polygon sampling.
+    Builds a 24-hour rainfall accumulation
+    from IMERG Early Half-Hourly granules.
+
+    IMERG precipitation is in mm/hr.
+
+    Therefore each file contributes
+
+        precipitation × 0.5 hr
+
+    to the accumulation.
     """
 
-    login()
+    accumulation = None
 
-    local_file = download_imerg(end_time)
+    for file in files:
 
-    ds = xr.open_dataset(local_file)
+        ds = xr.open_dataset(
+            file,
+            engine="netcdf4",
+            group="Grid",
+        )
 
-    rain = ds["precipitation"].isel(time=0)
+        rain = ds["precipitation"].isel(
+            time=0,
+        )
 
-    rainfall = rain.values
+        # Convert half-hour rainfall rate
+        # into accumulated rainfall.        
+
+        rain_mm = rain * 0.5
+
+        if accumulation is None:
+            accumulation = rain_mm
+        else:
+            accumulation += rain_mm
+
+        ds.close()
+
+    return accumulation
+
+def load_rainfall_dataset(
+    forecast_time,
+):
+    """
+    Returns a dictionary containing
+
+        accumulated rainfall
+        latitude array
+        longitude array
+        KD-tree
+
+    ready for polygon sampling.
+    """
+
+    forecast_utc, _ = build_gpm_request(forecast_time)
+    validate_request_time(forecast_utc)
+    files = download_imerg_24h(forecast_utc)
+    rain = build_24h_accumulation(files)
 
     latitudes = rain["lat"].values
     longitudes = rain["lon"].values
@@ -27,7 +73,7 @@ def load_rainfall_dataset(end_time):
     lon_grid, lat_grid = np.meshgrid(
         longitudes,
         latitudes,
-        indexing="xy",
+        indexing="xy"
     )
 
     coords = np.column_stack(
@@ -40,9 +86,13 @@ def load_rainfall_dataset(end_time):
     tree = cKDTree(coords)
 
     return {
+
         "rain": rain,
+
         "latitudes": latitudes,
         "longitudes": longitudes,
-        "tree": tree,
+
         "coords": coords,
+        "tree": tree,
+
     }

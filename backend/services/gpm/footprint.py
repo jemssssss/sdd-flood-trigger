@@ -2,21 +2,24 @@ from pathlib import Path
 import geopandas as gpd
 import numpy as np
 from django.conf import settings
-from shapely.geometry import Point
-from services.gpm.datetime import (build_gpm_request)
-from services.gpm.sampler import (load_rainfall_dataset)
-from services.sentinel.passes import (get_sentinel_pass_info)
+from shapely import covers, points
+from services.gpm.sampler import load_rainfall_dataset
+from services.sentinel.passes import get_sentinel_pass_info
 
 ROOT = settings.BASE_DIR.parent
 
 def compute_gpm_footprints(
-    forecast_time
+    forecast_time,
 ):
 
-    pass_info = get_sentinel_pass_info(forecast_time)
+    pass_info = get_sentinel_pass_info(
+        forecast_time,
+    )
 
+    # No satellite pass.
     if not pass_info["hasPass"]:
         return {
+
             "geojson": {
                 "type": "FeatureCollection",
                 "features": [],
@@ -26,7 +29,12 @@ def compute_gpm_footprints(
                 "heavy": [],
             },
             "passInfo": pass_info,
+
         }
+
+    # ------------------------
+    # Load footprint GeoJSON
+    # ------------------------
 
     footprint_file = (
         ROOT
@@ -37,22 +45,26 @@ def compute_gpm_footprints(
     )
 
     footprints = gpd.read_file(footprint_file)
-
     footprints = footprints.set_crs(
         "EPSG:4326",
         allow_override=True,
     )
 
+    # Keep only strips that actually passed.
+
     strips = pass_info["strips"]
+
     footprints = footprints[
+
         footprints["TileNumber"]
         .str[0]
         .isin(strips)
+
     ].copy()
 
     if footprints.empty:
-
         return {
+
             "geojson": {
                 "type": "FeatureCollection",
                 "features": [],
@@ -62,112 +74,118 @@ def compute_gpm_footprints(
                 "heavy": [],
             },
             "passInfo": pass_info,
+
         }
 
-    end_time = build_gpm_request(forecast_time)
-    sampler = load_rainfall_dataset(end_time)
+    # ----------------------------
+    # Load accumulated rainfall
+    # ----------------------------
+
+    sampler = load_rainfall_dataset(forecast_time)
     rain = sampler["rain"]
     latitudes = sampler["latitudes"]
     longitudes = sampler["longitudes"]
-    coords = sampler["coords"]
-    tree = sampler["tree"]
 
+    tree = sampler["tree"]
     rain_values = rain.values
 
     summary = {
         "moderate": [],
-        "heavy": [],
+        "heavy": []
     }
 
-    for _, row in footprints.iterrows():
+    # ------------------------
+    # Sample every footprint
+    # ------------------------
 
+    for index, row in footprints.iterrows():
         polygon = row.geometry
-
         minx, miny, maxx, maxy = polygon.bounds
-
         lon_idx = np.where(
             (longitudes >= minx)
             & (longitudes <= maxx)
         )[0]
-
         lat_idx = np.where(
             (latitudes >= miny)
             & (latitudes <= maxy)
         )[0]
+        values = np.array([])
 
-        values = []
-
-        if len(lon_idx) and len(lat_idx):
-
+        # Normal polygon sampling.
+        if len(lon_idx) > 0 and len(lat_idx) > 0:
             subset_lon = longitudes[lon_idx]
             subset_lat = latitudes[lat_idx]
-
             xx, yy = np.meshgrid(
                 subset_lon,
                 subset_lat,
-                indexing="xy",
+                indexing="xy"
             )
-
-            from shapely import points, covers
-
             pts = points(
                 xx.ravel(),
-                yy.ravel(),
+                yy.ravel()
             )
-
             inside = covers(
                 polygon,
-                pts,
+                pts
             )
-
-            subset = rain_values[
-                np.ix_(lon_idx, lat_idx)
-            ].T
-
+            subset = rain_values[np.ix_(lon_idx, lat_idx)].T
             values = subset.ravel()[inside]
-
-            values = values[
-                ~np.isnan(values)
-            ]
-
-        # Fallback to nearest grid point
-        if len(values) == 0:
-
+            values = values[~np.isnan(values)]
+        
+        # Fallback:
+        # use four nearest pixels.
+        method = "inside_polygon"
+        if values.size == 0:
             centroid = polygon.centroid
-
             _, nearest = tree.query(
-                [centroid.x, centroid.y],
-                k=4,
+                [
+                    centroid.x,
+                    centroid.y,
+                ],
+                k=4
             )
 
-            nearest_values = rain_values.ravel()[nearest]
-            nearest_values = nearest_values[~np.isnan(nearest_values)]
-            values = nearest_values
+            values = rain_values.ravel()[nearest]
+            values = values[~np.isnan(values)]
 
-        average = float(np.mean(values))
+            method = "nearest_4"
+
+        # No usable rainfall.
+        if values.size == 0:
+            average = np.nan
+            method = "no_data"
+        else:
+            average = float(values.mean())
 
         footprints.loc[
-            row.name,
+            index,
             "gpmRainfall",
         ] = average
 
-        if 60 <= average <= 180:
+        footprints.loc[
+            index,
+            "samplingMethod",
+        ] = method
 
-            summary["moderate"].append(
-                row["TileNumber"]
-            )
+        # Flood summary.
+        if np.isnan(average):
+            continue
+
+        tile = row["TileNumber"]
+
+        if 60 <= average <= 180:
+            summary["moderate"].append(tile)
 
         elif average > 180:
-
-            summary["heavy"].append(
-                row["TileNumber"]
-            )
+            summary["heavy"].append(tile)
 
     summary["moderate"].sort()
     summary["heavy"].sort()
 
     return {
+
         "geojson": footprints.__geo_interface__,
         "summary": summary,
         "passInfo": pass_info,
+
     }
