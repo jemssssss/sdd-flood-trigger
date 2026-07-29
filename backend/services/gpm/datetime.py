@@ -26,16 +26,9 @@ def parse_forecast_time(
         2026-07-28T06:00:00
     """
 
-    dt = datetime.fromisoformat(
-        forecast_time.replace(
-            "Z",
-            "",
-        )
-    )
+    dt = datetime.fromisoformat(forecast_time.replace("Z", ""))
 
-    return dt.replace(
-        tzinfo=timezone(PST_OFFSET)
-    )
+    return dt.replace(tzinfo=timezone(PST_OFFSET))
 
 def build_gpm_request(
     forecast_time: str,
@@ -45,10 +38,14 @@ def build_gpm_request(
 
     forecast_utc = forecast_pst.astimezone(timezone.utc)
     init_utc = (forecast_utc - timedelta(days=1))
+    forecast_utc = (forecast_utc - timedelta(seconds=1))
+
+    print("GPM Start Time (UTC): ", init_utc)
+    print("GPM End Time (UTC): ", forecast_utc)
 
     return (
         forecast_utc,
-        init_utc,
+        init_utc
     )
 
 

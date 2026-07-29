@@ -16,5 +16,5 @@ export function getLatestTimeDate() {
     //hour12: true
   });
 
-  return formatter.format(now).replace(",", "");
+  return formatter.format(now);
 }

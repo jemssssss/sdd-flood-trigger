@@ -253,8 +253,8 @@ def get_active_accumulation_window(now=None):
 
     init = forecast - timedelta(days=1)
     
-    print("Forecast Datetime:", forecast)
-    print("Initial Datetime:", init)
+    print("Forecast Datetime (PH Time):", forecast)
+    print("Initial Datetime (PH Time):", init)
     return {
 
         "forecast": forecast,

@@ -9,7 +9,7 @@ from scipy.spatial import cKDTree
 ek.config.set(
     {
         "cache-policy": "user",
-        "user-cache-directory": "./earthkit_cache",
+        "user-cache-directory": "./data/earthkit_cache",
     }
 )
 

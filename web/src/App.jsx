@@ -3,6 +3,7 @@ import MapView from "./components/MapView";
 import LayerControl from "./components/LayerControl";
 import RainLegend from "./components/RainLegend";
 import FloodSummary from "./components/FloodSummary";
+import { getLatestTimeDate } from "./utils/timeUtils";
 import { useEffect, useState } from "react";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_BASE_URL;
@@ -214,7 +215,7 @@ function App() {
                   <>
                     <strong>No Satellite Pass</strong>
                     <span>
-                      {passInfo.satellite} has no Philippines pass on {passInfo.passDate}.
+                      Sentinel-1 satellites have no Philippines pass on {getLatestTimeDate()}.
                     </span>
                   </>
                 )}
