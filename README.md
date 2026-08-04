@@ -2,7 +2,7 @@
 
 A web-based rainfall visualization dashboard built with **React**, **Vite**, **MapLibre GL JS**, and a lightweight **Django backend**.
 
-The application retrieves **Synoptic Station**, **Automatic Weather Station (AWS)**, and **Sentinel-1 satellite footprint rainfall** from the **Panahon API** and **ECMWF Open Data** (via **earthkit-data API**) through backend service endpoints. Rainfall data from each source is processed independently before being visualized on the frontend. Sentinel footprint layers are pass-aware: only the strip scheduled to pass over the Philippines on the forecast datetime is processed and displayed. The architecture also provides the foundation for future **PostgreSQL/PostGIS** integration and additional Python-based geospatial services.
+The application retrieves **Synoptic Station**, **Automatic Weather Station (AWS)**, and **Sentinel-1 satellite footprint rainfall** from the **Panahon API**, **ECMWF Open Data** (via **Earthkit API**), and **NASA GPM IMERG** (via **Earthaccess API**) through backend service endpoints. Rainfall data from each source is processed independently before being visualized on the frontend. Sentinel-1 satellite footprint layers are pass-aware: only the strip scheduled to pass over the Philippines on the forecast datetime is processed and displayed. The architecture also provides the foundation for future **PostgreSQL/PostGIS** integration and additional Python-based geospatial services.
 
 ![SDD Flood Trigger Preview](/docs/dashboard_preview.png)
 
@@ -22,10 +22,12 @@ The application retrieves **Synoptic Station**, **Automatic Weather Station (AWS
   - Automatic Weather Stations (AWS)
   - Panahon API Forecast Data
   - ECMWF Forecast Data
+  - NASA GPM IMERG Observational Data
 - Displays Sentinel-1A or Sentinel-1C footprints only when a configured strip passes on the forecast date
 - Computes 24-hour accumulated forecast rainfall from Panahon API for every footprint in the passing strip
 - Computes 24-hour accumulated forecast rainfall from ECMWF Open Data for every footprint in the passing strip
-- Uses pre-generated sampling points (specifically for Panahon API) for reproducible rainfall averaging
+- Computes 24-hour accumulated forecast rainfall from NASA GPM IMERG for every footprint in the passing strip
+- Uses pre-generated sampling points via Poisson disk sampling (specifically for Panahon API) for reproducible rainfall averaging
 - Summarizes list of Sentinel-1 satellite footprints showing signs of flooding
 - Color-coded rainfall stations
 - Color-coded footprint polygons
@@ -38,6 +40,7 @@ The application retrieves **Synoptic Station**, **Automatic Weather Station (AWS
 - Backend Sentinel-1 satellite footprint sampling service
 - Backend rainfall parsing service
 - Cached point rainfall requests
+- Cached downloaded GRIB/HDF5 files from Earthkit and Earthaccess APIs
 - Prepared for PostgreSQL/PostGIS integration
 
 ---
@@ -64,6 +67,7 @@ The application retrieves **Synoptic Station**, **Automatic Weather Station (AWS
 | httpx | 0.28.1 |
 | MapLibre GL JS | Latest compatible version |
 | Turf.js | Latest compatible version |
+| Poisson Disk Sampling | Latest compatible version |
 
 
 ---
@@ -241,6 +245,7 @@ backend/
 │   └── wsgi.py
 │
 ├── data/
+│   ├── earthkit_cache/
 │   └── gpm_cache/
 │
 ├── scripts/
@@ -282,6 +287,7 @@ web/
     ├── components/
     │   ├── map/
     │   │   ├── ecmwfTileLayer.jsx
+    │   │   ├── gpmTileLayer.jsx
     │   │   ├── panahonTileLayer.jsx
     │   │   └── stationLayer.jsx
     │   │
@@ -310,26 +316,26 @@ web/
 # Application Workflow
 
 ```text
-      Panahon API                 earthkit-data API
-          │                               │
-          └──────────────┬────────────────┘
-                         │
-                         ▼
-                Django Backend Services
-         ┌───────────────┼────────────────┐
-         │               │                │
-         ▼               ▼                ▼
-   Station Client   Point Sampling   Footprint Service
-         │               │                │
-         └───────────────┼────────────────┘
-                         │
-                  JSON API Endpoints
-                         │
-                         ▼
-                 React + Vite Frontend
-                         │
-                         ▼
-                    MapLibre GL JS
+                    Panahon API   Earthaccess API   Earthkit API
+                          │              │              │
+                          └──────────────┼──────────────┘
+                                         │
+                                         ▼
+                              Django Backend Services
+         ┌────────────────────┬──────────┴──────────┬─────────────────────┐
+         │                    │                     │                     │
+         ▼                    ▼                     ▼                     ▼ 
+  Station Client        Point Sampling      Footprint Service   Sentinel-1 Strip Service
+         │                    │                     │                     │
+         └────────────────────┴──────────┬──────────┴─────────────────────┘
+                                         │
+                                 JSON API Endpoints
+                                         │
+                                         ▼
+                               React + Vite Frontend
+                                         │
+                                         ▼
+                                   MapLibre GL JS
 ```
 
 ---
@@ -370,7 +376,7 @@ For example, a returned `passInfo` object has this shape:
 }
 ```
 
-Satellite schedules and footprint filenames are defined in `backend/services/sentinel/passes.py`. To add a future satellite, add its aliases, repeat period, strip reference dates, and GeoJSON filename to the `SATELLITES` registry after its footprint file is available. The Panahon and ECMWF services already resolve these values from the registry.
+Satellite schedules and footprint filenames are defined in `backend/services/sentinel/passes.py`. To add a future satellite, add its aliases, repeat period, strip reference dates, and GeoJSON filename to the `SATELLITES` registry after its footprint file is available. The Panahon, ECMWF, and NASA GPM services already resolve these values from the registry.
 
 ---
 
@@ -630,7 +636,7 @@ feature.properties.averageRainfall
 
 # ECMWF Open Data Integration
 
-The dashboard also supports rainfall visualization from ECMWF Open Data.
+The dashboard also supports rainfall visualization from ECMWF's **Open Data** dataset.
 
 24-hour accumulated total precipitation (tp) from the ECMWF Open Data service is downloaded on demand using earthkit-data and processed on the backend before being sent to the frontend.
 
@@ -759,6 +765,279 @@ Restricting the search to the bounding box significantly reduces the number of p
 
 ---
 
+# NASA GPM IMERG Integration
+
+The dashboard also supports rainfall visualization from NASA's **Global Precipitation Measurement (GPM) Integrated Multi-satellite Retrievals for GPM (IMERG)**.
+
+24-hour accumulated rainfall is computed from the **IMERG Early Half-Hourly V07** product downloaded through `earthaccess`. The backend accumulates 48 half-hourly precipitation fields before computing the average rainfall over each Sentinel-1 satellite footprint.
+
+## Footprint Raster Sampling
+
+Unlike the Panahon API, GPM rainfall is computed directly from the IMERG raster.
+
+Workflow:
+
+```text
+earthaccess
+
+↓
+
+Search IMERG Half-Hourly granules
+
+↓
+
+Download 48 HDF5 files
+
+↓
+
+Open each file using Xarray
+
+↓
+
+Convert precipitation rate to rainfall accumulation
+
+↓
+
+Build 24-hour accumulated rainfall raster
+
+↓
+
+Extract rainfall values inside each Sentinel-1 satellite footprint
+
+↓
+
+Compute average rainfall
+
+↓
+
+Return GeoJSON to React
+```
+
+The backend automatically:
+
+- searches for the required IMERG Half-Hourly granules
+- downloads (or reuses cached) HDF5 files
+- builds a 24-hour accumulated rainfall raster
+- filters to the scheduled Sentinel-1 satellite strip, then extracts rainfall inside its footprints
+- computes average rainfall
+- returns GeoJSON to the frontend
+
+## Downloading IMERG Half-Hourly using earthaccess
+
+The IMERG data is downloaded using the `earthaccess` library defined in `backend/services/gpm/dataset.py`.
+
+Here's an example search request:
+
+```python
+granules = earthaccess.search_data(
+    short_name="GPM_3IMERGHHE",
+    temporal=(
+        init_time.isoformat(),
+        forecast_time.isoformat(),
+    ),
+)
+```
+
+The returned granules are downloaded locally using:
+
+```python
+earthaccess.download(
+    granules,
+    local_path=DOWNLOAD_DIR,
+)
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `short_name="GPM_3IMERGHHE"` | IMERG Early Half-Hourly Version 07 product |
+| `temporal` | 24-hour search interval between the initialization time and forecast time |
+
+Unlike the Daily IMERG product, the Half-Hourly product returns one HDF5 file every 30 minutes. A complete 24-hour accumulation therefore consists of **48 granules**.
+
+> **Note**
+>
+> IMERG Early data is typically available approximately **5 hours behind UTC real time**. Requests newer than the latest available product are rejected by the backend.
+
+## Earthdata Login
+
+NASA GPM IMERG data is distributed through the **NASA Earthdata** system, which requires user authentication before any datasets can be searched or downloaded.
+
+The backend performs authentication using the `earthaccess` library. Login credentials are stored as environment variables and are loaded at runtime using `python-dotenv`.
+
+The login routine is implemented in `backend/services/gpm/dataset.py`:
+
+```python
+from dotenv import load_dotenv
+import earthaccess
+
+load_dotenv()
+
+earthaccess.login(
+    strategy="environment",
+    persist=False,
+)
+```
+
+The required environment variables are stored in the backend `.env` file:
+
+```text
+EARTHDATA_USERNAME=your_username
+EARTHDATA_PASSWORD=your_password
+```
+
+The `environment` authentication strategy instructs `earthaccess` to read these credentials directly from the environment instead of prompting the user interactively.
+
+Using
+
+```python
+persist=False
+```
+
+prevents Earthaccess from saving authentication credentials to the local machine, allowing every dashboard instance to authenticate only for the current application session.
+
+To avoid repeated authentication during the lifetime of the backend process, the service maintains a simple login flag:
+
+```python
+_logged_in = False
+```
+
+The login function first checks whether authentication has already been completed:
+
+```python
+if _logged_in:
+    return
+```
+
+If the user has already authenticated, subsequent requests immediately reuse the existing Earthdata session without performing another login request.
+
+This approach provides two advantages:
+
+- only one authentication request is sent to the Earthdata servers during the application's lifetime;
+- subsequent IMERG downloads can begin immediately without incurring additional login overhead.
+
+> **Note**
+>
+> Before using this feature, an Earthdata account must first be created and granted access to the GPM IMERG datasets. Authentication is mandatory even though the IMERG Early products are publicly available through NASA. A free account is sufficient for the scope of this project, which can be made here: `https://urs.earthdata.nasa.gov/`
+
+## Building the 24-Hour Rainfall Accumulation
+
+Each IMERG Half-Hourly file stores precipitation as a rainfall rate in **millimetres per hour (mm/hr)**.
+
+The rainfall layer is extracted from the `Grid` group of each HDF5 file:
+
+```python
+ds = xr.open_dataset(
+    file,
+    engine="netcdf4",
+    group="Grid",
+)
+
+rain = ds["precipitation"].isel(time=0)
+```
+
+Each file represents rainfall over a 30-minute interval.
+
+The rainfall accumulation contributed by each file is therefore computed as:
+
+```python
+rain_mm = rain * 0.5
+```
+
+Since
+
+```text
+Rainfall accumulation
+=
+Rainfall rate × Duration
+```
+
+and the duration is **0.5 hour**, multiplying by `0.5` converts the rainfall rate into accumulated rainfall for that half-hour period.
+
+The backend then sums the rainfall from all downloaded granules:
+
+```python
+accumulation += rain_mm
+```
+
+The resulting raster represents the total rainfall accumulated during the requested 24-hour period.
+
+## Building the Spatial Index
+
+The IMERG rainfall grid consists of regularly spaced latitude and longitude coordinates.
+
+The script first generates all grid-point coordinates:
+
+```python
+lon_grid, lat_grid = np.meshgrid(
+    longitudes,
+    latitudes,
+)
+```
+
+The coordinate arrays are flattened into a list of longitude-latitude pairs:
+
+```python
+coords = np.column_stack((
+    lon_grid.ravel(),
+    lat_grid.ravel(),
+))
+```
+
+A KD-tree is then created:
+
+```python
+tree = cKDTree(coords)
+```
+
+The KD-tree enables fast nearest-neighbour searches, which are used as a fallback when a footprint contains no IMERG grid points.
+
+## Average Rainfall Computation
+
+For each footprint:
+
+1. Computes the polygon's bounding box.
+2. Finds all IMERG grid points inside the bounding box.
+3. Checks whether each candidate point lies inside the footprint.
+4. Collects the rainfall values for those grid points.
+5. Computes the arithmetic mean.
+6. Stores the result as:
+
+```javascript
+feature.properties.gpmRainfall
+```
+
+Restricting the search to the bounding box significantly reduces the number of point-in-polygon tests compared to checking every IMERG grid point.
+
+## Download Cache
+
+Downloading 48 IMERG granules every time the dashboard refreshes would significantly increase response time.
+
+To reduce unnecessary downloads, the backend maintains a cache organized by forecast time.
+
+Example:
+
+```text
+backend/
+└── data/
+    └── gpm_cache/
+        ├── 20260728_0200/
+        │   ├── 3B-HHR-E.MS.MRG...
+        │   ├── 3B-HHR-E.MS.MRG...
+        │   └── ...
+        └── 20260729_0200/
+            └── ...
+```
+
+Whenever a forecast time is requested:
+
+- If the corresponding cache already exists and contains all required granules, the cached files are reused.
+- Otherwise, the missing IMERG granules are downloaded from NASA Earthdata.
+- Old forecast caches are automatically removed so that only the latest forecast remains on disk.
+
+This caching strategy substantially reduces dashboard loading time while minimizing repeated downloads from the Earthdata servers.
+
+---
+
 # Layer Controls
 
 The dashboard includes a control panel that allows users to independently toggle:
@@ -767,6 +1046,7 @@ The dashboard includes a control panel that allows users to independently toggle
 - AWS Stations
 - Footprints (Panahon)
 - Footprints (ECMWF)
+- Footprints (NASA GPM)
 
 Layer visibility is managed using MapLibre's `layout.visibility` property without reloading map sources.
 
@@ -795,21 +1075,23 @@ The rainfall label automatically changes depending on station type:
 
 # Footprint Popups
 
-Clicking a Sentinel-1A footprint displays:
+Clicking a Sentinel-1 satellite footprint displays:
 
 - Sentinel-1 Satellite Footprint Tile Number
 - Forecasted Date
 - Sensing Time (Panahon)
 - Sensing Time (ECMWF)
+- Sensing Time (NASA GPM)
 - Sampling Points Used
 - Panahon API Forecast Rainfall (24 h)
 - ECMWF Open Data Rainfall (24 h)
+- NASA GPM IMERG Rainfall (24 h)
 
-![Sentinel-1A Footprint Popup](/docs/footprint_popup.png)
+![Sentinel-1 Satellite Footprint Popup](/docs/footprint_popup.png)
 
 > **Note**
 >
-> Sensing time from ECMWF is behind by 4 hours compared to the sensing time from Panahon to accommodate ECMWF's required time fields. 
+> Sensing time from ECMWF is behind by 4 hours compared to the sensing time from Panahon to accommodate ECMWF's required time fields. Similarly, sensing time from NASA GPM is behind by 13 hours due to the fact that it's observational data based in UTC.
 
 ---
 
@@ -828,27 +1110,23 @@ The application provides feedback during data retrieval.
 - React manages application state.
 - MapLibre GL JS renders all spatial layers.
 - Layer rendering has been modularized into dedicated map layer components.
-- Turf.js generated the initial sampling points.
+- Turf.js generated the initial sampling points, and point distribution is handled via Poisson disk sampling.
 - Sampling points are reused between application runs.
-- For every footprint in the Sentinel strip scheduled for the forecast date:
-  1. Django loads the satellite-specific footprint GeoJSON from the satellite registry.
-  2. Django loads the predefined sampling points.
-  3. Each sampling point requests 24-hour accumulated rainfall from the Panahon API.
-  4. Results are cached to avoid duplicate requests.
-  5. The maximum sampled Panahon rainfall value is selected.
-  6. The average rainfall is stored in the GeoJSON feature.
-  7. Flood summary tiles are generated.
-  8. The completed GeoJSON is returned to React.
-- Forecast timestamps are generated dynamically; the forecast timestamp determines the visible Sentinel strip.
-- API responses are normalized before visualization.
+- Forecast timestamps are generated dynamically; the forecast timestamp determines the visible Sentinel-1 satellite strip.
 - Environment variables are accessed using `import.meta.env`.
-- Django serves as the backend API layer.
-- Rainfall parsing has been migrated from React to Python.
-- Footprint sampling is now performed on the backend.
 - API tokens remain on the backend; `PANAHON_API_TOKEN` is read from the Django process environment.
-- React now focuses primarily on visualization.
-- Earthkit-data downloads ECMWF Open Data forecasts on demand.
-- ECMWF rainfall is calculated directly from raster cells instead of sampling discrete points.
+- React focuses primarily on visualization.
+- Available Panahon API data depends on initialization from `panahon.gov.ph`, which can occur in two cases:
+  - Earliest rainfall accumulation hour starts from 8 PM the day before the initialization date. 
+  - Earliest rainfall accumulation hour starts from 8 AM the day during the initialization date.
+- Earthkit downloads ECMWF Open Data forecasts on demand.
+- Earthaccess downloads NASA GPM IMERG Early Run (Half-Hourly files) observational data on demand.
+- Earthaccess API requires an Earthdata account; credentials are saved as environment variables in backend.
+- ECMWF and NASA GPM rainfall is calculated directly from raster cells instead of sampling discrete points.
+- Sensing times for each model/API differ due to differences in timezone or specifications:
+  - Panahon API data is synchronous with current Philippine time.
+  - ECMWF Open Data is late by 4 hours from current Philippine time.
+  - NASA GPM IMERG's earliest run is late by 13 hours from current Philippine time.
 - KD-tree nearest-neighbor search is used as a fallback when a footprint does not intersect any ECMWF grid cell.
 - Panahon API requests are executed concurrently using asyncio and httpx.
 - Duplicate sampling points are automatically removed before requesting rainfall.
@@ -874,6 +1152,13 @@ ECMWF
 - Footprint rainfall endpoint
 - Forecast datetime conversion service
 - Earthkit dataset loader
+
+NASA GPM
+
+- Footprint rainfall endpoint
+- Forecast datetime conversion service
+- Earthdata login service
+- Earthaccess dataset loader
 
 Sentinel-1
 
@@ -949,7 +1234,7 @@ Verify:
 Verify:
 
 - the generated forecast timestamp matches the latest available forecast
-- `footprintSamplePoints.json` contains valid coordinates
+- `footprintSamplePoints.json` and/or `footprintSamplePoints_C.json` contain valid coordinates
 - the Panahon forecast endpoint returns valid values
 
 ---

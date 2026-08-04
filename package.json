@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "axios": "^1.18.1",
-    "httpx": "^3.0.1"
+    "httpx": "^3.0.1",
+    "poisson-disk-sampling": "^2.3.1"
   }
 }
